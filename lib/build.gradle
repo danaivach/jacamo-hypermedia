@@ -1,0 +1,45 @@
+plugins {
+    // Apply the java-library plugin for API and implementation separation.
+    id 'java-library'
+}
+
+version '0.0.1'
+
+tasks.named('jar') {
+    manifest {
+        attributes('Implementation-Title': rootProject.name,
+          'Implementation-Version': project.version)
+
+        archiveBaseName.set(rootProject.name)
+    }
+}
+
+repositories {
+    mavenCentral()
+
+    maven { url "https://raw.github.com/jacamo-lang/mvn-repo/master" }
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation group: 'org.jacamo', name: 'jacamo', version: '0.9-SNAPSHOT'
+    implementation group: 'com.github.Interactions-HSG', name: 'wot-td-java', version: 'master-SNAPSHOT'
+
+    implementation 'org.apache.httpcomponents.client5:httpclient5-fluent:5.0'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'com.google.code.gson:gson:2.8.6'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+        }
+    }
+    test {
+        java {
+            srcDir 'src/test/java'
+        }
+    }
+}
