@@ -1,6 +1,17 @@
 # What to Contribute?
 
-Great, feel free to jump right into it! Just one note:
+Great, feel free to jump right into it:
+1. Pick an existing issue — or create a new one that describes your contribution.
+2. Create a new branch for your contribution. We use the following convention for naming branches:
+    * `feat-YOUR-FEATURE`: when creating a branch to develop a new feature
+    * `fix-YOUR-FIX`: when creating a branch to fix an issue
+3. Open a pull request when ready.
+
+## Before you start cranking
+
+We follow the [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html) and the [JaCaMo Style Guide](https://jacamo-lang.github.io/documentation/programming-style/index.html).
+
+We use [Test-Driven Development](https://martinfowler.com/bliki/TestDrivenDevelopment.html). If you write new code, please make sure you also write tests with a decent code coverage.
 
 We use [Conventional Changelog](https://github.com/conventional-changelog/conventional-changelog) to
 generate changelogs from [Conventional Commit messages](https://www.conventionalcommits.org/).
