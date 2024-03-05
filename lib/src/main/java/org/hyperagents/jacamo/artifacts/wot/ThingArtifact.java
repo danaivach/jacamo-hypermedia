@@ -200,6 +200,53 @@ public class ThingArtifact extends Artifact {
   }
 
   /**
+   * CArtAgO operation for invoking an action on a Thing using a semantic model of the Thing.
+   *
+   * @param actionTag Either an IRI that identifies the action type, or the action's name.
+   * @param payloadTags A list of IRIs or object property names (used for object schema payloads).
+   * @param payload The payload to be issued when invoking the action.
+   * @param outputTags A list of IRIs or object property names (used for the output schema)
+   * @param output The list of values of the response payload.
+   */
+  @OPERATION
+  public void invokeAction(String actionTag, Object[] payloadTags, Object[] payload, Object[] outputTags, OpFeedbackParam<Object[]> output) {
+    validateParameters(actionTag, payloadTags, payload);
+
+    Optional<ActionAffordance> action = td.getFirstActionBySemanticType(actionTag);
+
+    if (!action.isPresent()) {
+      action = td.getActionByName(actionTag);
+    }
+
+    if (action.isPresent()) {
+      Optional<Form> form = action.get().getFirstForm();
+
+      if (!form.isPresent()) {
+        // Should not happen (an exception will be raised by the TD library first)
+        failed("Invalid TD: the invoked action does not have a valid form.");
+      }
+
+      Optional<DataSchema> inputSchema = action.get().getInputSchema();
+      if (!inputSchema.isPresent() && payload.length > 0) {
+        failed("This type of action does not take any input: " + actionTag);
+      }
+
+      Optional<TDHttpResponse> response = executeRequest(TD.invokeAction, form.get(), inputSchema,
+        payloadTags, payload);
+
+      if (!dryRun & response.isPresent()) {
+        if (!requestSucceeded(response.get().getStatusCode())) {
+          failed("Status code: " + response.get().getStatusCode());
+        } else if (action.get().getOutputSchema().isPresent()) {
+          readPayloadWithSchema(response.get(), action.get().getOutputSchema().get(), outputTags, output);
+        }
+      }
+    } else {
+      failed("Unknown action: " + actionTag);
+    }
+  }
+
+  /**
    * CArtAgO operation that sets an authentication token (used with APIKeySecurityScheme).
    *
    * @param token The authentication token.
@@ -302,6 +349,53 @@ public class ThingArtifact extends Artifact {
     }
 
     return property.get();
+  }
+
+  @SuppressWarnings("unchecked")
+  private void readPayloadWithSchema(TDHttpResponse response, DataSchema schema,
+      Object[] tags, OpFeedbackParam<Object[]> output) {
+  
+    switch (schema.getDatatype()) {
+      case DataSchema.BOOLEAN:
+        output.set(new Boolean[] { response.getPayloadAsBoolean() });
+        break;
+      case DataSchema.STRING:
+        output.set(new String[] { response.getPayloadAsString() });
+        break;
+      case DataSchema.INTEGER:
+        output.set(new Integer[] { response.getPayloadAsInteger() });
+        break;
+      case DataSchema.NUMBER:
+        output.set(new Double[] { response.getPayloadAsDouble() });
+        break;
+      case DataSchema.OBJECT:
+        // Only consider this case if the invoked CArtAgO operation was for an object payload
+        // (i.e., a list of tags is expected).
+
+        Map<String, Object> payload = response.getPayloadAsObject((ObjectSchema) schema);
+        List<String> tagList = new ArrayList<String>();
+        List<Object> data = new ArrayList<Object>();
+        List<Object> preferredTags = new ArrayList<Object>();
+        for (String tag : payload.keySet()) {
+          if (preferredTags.contains(tag)){
+            tagList.add(tag);
+            Object value = payload.get(tag);
+            if (value instanceof Collection<?>) {
+              data.add(nestedListsToArrays((Collection<Object>) value));
+            } else {
+              data.add(value);
+              }
+          }
+        }
+        output.set(data.toArray());
+        break;
+      case DataSchema.ARRAY:
+        List<Object> arrayPayload = response.getPayloadAsArray((ArraySchema) schema);
+        output.set(nestedListsToArrays(arrayPayload));
+        break;
+      default:
+        break;
+    }
   }
 
   // TODO: Reading payloads of type object currently works with 2 limitations:
