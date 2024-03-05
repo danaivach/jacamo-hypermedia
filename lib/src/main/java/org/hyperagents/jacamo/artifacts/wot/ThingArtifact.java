@@ -167,7 +167,7 @@ public class ThingArtifact extends Artifact {
    */
   @OPERATION
   public void invokeAction(String actionTag, Object[] payloadTags, Object[] payload) {
-    validateParameters(actionTag, payloadTags, payload);
+    //validateParameters(actionTag, payloadTags, payload);
 
     Optional<ActionAffordance> action = td.getFirstActionBySemanticType(actionTag);
 
@@ -210,7 +210,7 @@ public class ThingArtifact extends Artifact {
    */
   @OPERATION
   public void invokeAction(String actionTag, Object[] payloadTags, Object[] payload, Object[] outputTags, OpFeedbackParam<Object[]> output) {
-    // validateParameters(actionTag, payloadTags, payload);
+    //validateParameters(actionTag, payloadTags, payload);
 
     Optional<ActionAffordance> action = td.getFirstActionBySemanticType(actionTag);
 
