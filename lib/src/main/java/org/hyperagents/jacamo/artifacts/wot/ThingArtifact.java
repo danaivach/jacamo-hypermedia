@@ -481,7 +481,7 @@ public class ThingArtifact extends Artifact {
       Optional<DataSchema> schema, Object[] tags, Object[] payload) {
     if (schema.isPresent() && payload.length > 0) {
       // Request with payload
-      if (tags.length > 1) {
+      if (tags.length >= 1) {
         return executeRequestObjectPayload(operationType, form, schema.get(), tags, payload);
       } else if (payload.length == 1 && !(payload[0] instanceof Object[])) {
         return executeRequestPrimitivePayload(operationType, form, schema.get(), payload[0]);
