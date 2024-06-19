@@ -25,6 +25,16 @@ import cartago.ArtifactId;
 import cartago.INTERNAL_OPERATION;
 import cartago.OPERATION;
 
+/**
+ * NotificationServerArtifact is an artifact that acts as a server for receiving
+ * notifications from Yggdrasil WebSub nodes.
+ * It is responsible for registering artifacts for WebSub
+ * and delivering notifications to the registered artifacts.
+ * 
+ * Contributors:
+ * - Andrei Ciortea (author), Interactions-HSG, University of St. Gallen
+ *
+ */
 public class NotificationServerArtifact extends Artifact {
     private Map<String, ArtifactId> artifactRegistry;
     private AbstractQueue<Notification> notifications;

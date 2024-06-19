@@ -10,6 +10,17 @@ import org.hyperagents.jacamo.artifacts.wot.ThingArtifact;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.client5.http.fluent.Request;
 
+/**
+ * Extension to the ThingArtifact class that adds Yggdrasil-specific WebSub
+ * support.
+ * YggdrasilThingArtifact is a subclass of ThingArtifact and provides additional
+ * functionality
+ * for registering WebSub to a Yggdrasil node.
+ *
+ * Contributors:
+ * - Andrei Ciortea (author), Interactions-HSG, University of St. Gallen
+ *
+ */
 public class YggdrasilThingArtifact extends ThingArtifact {
 
     @Override
