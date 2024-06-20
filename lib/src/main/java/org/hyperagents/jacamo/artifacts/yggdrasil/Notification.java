@@ -4,6 +4,9 @@ public class Notification {
     private String entityIRI;
     private String message;
 
+    /**
+     * Represents a notification with an entity IRI and a message.
+     */
     public Notification(String entityIRI, String message) {
         this.entityIRI = entityIRI;
         this.message = message;

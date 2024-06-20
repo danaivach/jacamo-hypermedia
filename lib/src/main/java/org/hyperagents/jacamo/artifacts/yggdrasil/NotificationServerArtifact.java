@@ -30,9 +30,10 @@ import cartago.OPERATION;
  * notifications from Yggdrasil WebSub nodes.
  * It is responsible for registering artifacts for WebSub
  * and delivering notifications to the registered artifacts.
- * 
+ *
  * Contributors:
  * - Andrei Ciortea (author), Interactions-HSG, University of St. Gallen
+ * - Valentin Berger, Interactions-HSG, University of St. Gallen
  *
  */
 public class NotificationServerArtifact extends Artifact {
@@ -63,12 +64,28 @@ public class NotificationServerArtifact extends Artifact {
         notifications = new ConcurrentLinkedQueue<Notification>();
     }
 
+    /**
+     * Registers an artifact for WebSub and sends a subscribe request to the
+     * specified hub.
+     *
+     * @param artifactIRI The IRI of the artifact.
+     * @param artifactId  The ID of the artifact.
+     * @param hubIRI      The IRI of the WebSub hub.
+     */
     @OPERATION
     void registerArtifactForWebSub(String artifactIRI, ArtifactId artifactId, String hubIRI) {
         artifactRegistry.put(artifactIRI, artifactId);
         sendSubscribeRequest(hubIRI, artifactIRI);
     }
 
+    /**
+     * Registers an artifact for focus in the workspace and sends a focus request.
+     * 
+     * @param workspaceIRI The IRI of the workspace.
+     * @param artifactIRI  The IRI of the artifact.
+     * @param artifactId   The ID of the artifact.
+     * @param artifactName The name of the artifact.
+     */
     @OPERATION
     void registerArtifactForFocus(String workspaceIRI, String artifactIRI, ArtifactId artifactId,
             String artifactName) {
@@ -76,6 +93,13 @@ public class NotificationServerArtifact extends Artifact {
         sendFocusRequest(workspaceIRI, artifactName);
     }
 
+    /**
+     * Starts the notification server.
+     * This method sets the httpServerRunning flag to true, executes the internal
+     * operation "deliverNotifications",
+     * and starts the server.
+     * If an exception occurs, it will be printed to the standard error stream.
+     */
     @OPERATION
     void start() {
         try {
@@ -89,6 +113,9 @@ public class NotificationServerArtifact extends Artifact {
         }
     }
 
+    /**
+     * Stops the notification server.
+     */
     @OPERATION
     void stop() {
         try {
@@ -99,6 +126,15 @@ public class NotificationServerArtifact extends Artifact {
         }
     }
 
+    /**
+     * Delivers notifications to registered artifacts.
+     * This method runs in an internal operation and continuously checks for
+     * notifications in the queue.
+     * If a notification is found, it retrieves the corresponding artifact and
+     * invokes the "onNotification" method on it.
+     * If an exception occurs during the invocation, it is printed to the standard
+     * error stream.
+     */
     @INTERNAL_OPERATION
     void deliverNotifications() {
         while (httpServerRunning) {
@@ -192,30 +228,6 @@ public class NotificationServerArtifact extends Artifact {
                 response.getWriter()
                         .println("Link headers are missing! See the W3C WebSub Recommendation for details.");
             } else {
-                /**
-                 * Note: the following code (commented out) will occasionally throw an
-                 * IllegalMonitorStateException,
-                 * hence the need for an intermediary buffer.
-                 **/
-                // ArtifactId artifactId = artifactRegistry.get(artifactIRI);
-                //
-                // if (artifactId != null) {
-                // String notification =
-                // request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
-                //
-                // try {
-                // execLinkedOp(artifactId, "onNotification", new Notification(artifactIRI,
-                // notification));
-                // } catch (OperationException e) {
-                // log(e.getMessage());
-                // e.printStackTrace();
-                // }
-                //
-                // response.setStatus(HttpServletResponse.SC_OK);
-                // } else {
-                // response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                // }
-
                 if (artifactRegistry.containsKey(artifactIRI)) {
                     String payload = request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
 

@@ -1,27 +1,29 @@
-package org.hyperagents.jacamo.artifacts.yggdrasil;
+package org.hyperagents.jacamo.artifacts.wot;
 
 import java.util.Optional;
 import java.io.IOException;
 
 import cartago.LINK;
 
-import org.hyperagents.jacamo.artifacts.wot.ThingArtifact;
-
 import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.HttpResponse;
+import org.hyperagents.jacamo.artifacts.yggdrasil.Notification;
 import org.apache.hc.client5.http.fluent.Request;
+import org.apache.hc.client5.http.fluent.Response;
 
 /**
  * Extension to the ThingArtifact class that adds Yggdrasil-specific WebSub
  * support.
- * YggdrasilThingArtifact is a subclass of ThingArtifact and provides additional
+ * WebSubThingArtifact is a subclass of ThingArtifact and provides additional
  * functionality
  * for registering WebSub to a Yggdrasil node.
  *
  * Contributors:
  * - Andrei Ciortea (author), Interactions-HSG, University of St. Gallen
+ * - Valentin Berger, Interactions-HSG, University of St. Gallen
  *
  */
-public class YggdrasilThingArtifact extends ThingArtifact {
+public class WebSubThingArtifact extends ThingArtifact {
 
     @Override
     public void init(String url) {
@@ -51,7 +53,9 @@ public class YggdrasilThingArtifact extends ThingArtifact {
      */
     private void exposeWebSubIRIs(String url) {
         try {
-            Header[] headers = Request.get(url).execute().returnResponse().getHeaders("Link");
+            Response response = Request.get(url).execute();
+            HttpResponse httpResponse = response.returnResponse();
+            Header[] headers = httpResponse.getHeaders("Link");
 
             // This current implementation is specific to Yggdrasil, not a general
             // implementation
