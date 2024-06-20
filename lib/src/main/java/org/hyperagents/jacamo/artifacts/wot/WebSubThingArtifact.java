@@ -5,11 +5,15 @@ import java.io.IOException;
 
 import cartago.LINK;
 
+import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
-import org.apache.hc.core5.http.HttpResponse;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.hyperagents.jacamo.artifacts.yggdrasil.Notification;
 import org.apache.hc.client5.http.fluent.Request;
-import org.apache.hc.client5.http.fluent.Response;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Extension to the ThingArtifact class that adds Yggdrasil-specific WebSub
@@ -48,25 +52,28 @@ public class WebSubThingArtifact extends ThingArtifact {
     }
 
     /*
-     * Registers for WebSub to an Yggdrasil node. This is not a generic
-     * implementation, but one specific to Yggdrasil.
+     * Expose WebSub IRIs to the Agent from the given URL. This method checks the
+     * headers and the content of the URL if it is an HTML document.
      */
     private void exposeWebSubIRIs(String url) {
         try {
-            Response response = Request.get(url).execute();
-            HttpResponse httpResponse = response.returnResponse();
-            Header[] headers = httpResponse.getHeaders("Link");
+            ClassicHttpResponse classicResponse = (ClassicHttpResponse) Request
+                    .get(url).execute().returnResponse();
+            Header[] linkHeaders = classicResponse.getHeaders("Link");
 
-            // This current implementation is specific to Yggdrasil, not a general
-            // implementation
-            if (headers.length != 2) {
-                return;
+            String contentType = classicResponse.getFirstHeader("content-type").getValue();
+
+            HttpEntity entity = classicResponse.getEntity();
+            String content = "";
+            if (entity != null && contentType.contains("text/html")) {
+                content = EntityUtils.toString(entity);
             }
 
             Optional<String> hub = Optional.empty();
             Optional<String> topic = Optional.empty();
 
-            for (Header h : headers) {
+            // Check if the headers contain the WebSub links
+            for (Header h : linkHeaders) {
                 if (h.getValue().endsWith("rel=\"hub\"")) {
                     hub = Optional.of(h.getValue().substring(1, h.getValue().indexOf('>')));
                 }
@@ -76,10 +83,35 @@ public class WebSubThingArtifact extends ThingArtifact {
             }
 
             if (hub.isPresent() && topic.isPresent()) {
-                log("Found WebSub links: " + hub.get() + ", " + topic.get());
+                log("Found WebSub links in headers: " + hub.get() + ", " + topic.get());
+                defineObsProperty("websub", hub.get(), topic.get());
+                return;
+            }
+
+            // Check if the content contains the WebSub links
+            if (!hub.isPresent() && !topic.isPresent() && contentType.contains("text/html")) {
+                Pattern hubPattern = Pattern.compile("<link rel=\"hub\" href=\"([^\"]+)\">");
+                Pattern selfPattern = Pattern.compile("<link rel=\"self\" href=\"([^\"]+)\">");
+                Matcher hubMatcher = hubPattern.matcher(content);
+                Matcher selfMatcher = selfPattern.matcher(content);
+
+                if (hubMatcher.find()) {
+                    String hubHref = hubMatcher.group(1);
+                    hub = Optional.of(hubHref);
+                }
+
+                if (selfMatcher.find()) {
+                    String selfHref = selfMatcher.group(1);
+                    topic = Optional.of(selfHref);
+                }
+            }
+
+            if (hub.isPresent() && topic.isPresent()) {
+                log("Found WebSub links in Document: " + hub.get() + ", " + topic.get());
                 defineObsProperty("websub", hub.get(), topic.get());
             }
-        } catch (IOException e) {
+
+        } catch (IOException | ParseException e) {
             e.printStackTrace();
         }
     }
