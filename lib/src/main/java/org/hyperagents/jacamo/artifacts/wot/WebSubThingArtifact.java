@@ -1,5 +1,7 @@
 package org.hyperagents.jacamo.artifacts.wot;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.io.IOException;
 
@@ -57,28 +59,29 @@ public class WebSubThingArtifact extends ThingArtifact {
      */
     private void exposeWebSubIRIs(String url) {
         try {
-            ClassicHttpResponse classicResponse = (ClassicHttpResponse) Request
-                    .get(url).execute().returnResponse();
+            ClassicHttpResponse classicResponse = (ClassicHttpResponse) Request.get(url).execute().returnResponse();
             Header[] linkHeaders = classicResponse.getHeaders("Link");
-
             String contentType = classicResponse.getFirstHeader("content-type").getValue();
-
             HttpEntity entity = classicResponse.getEntity();
-            String content = "";
-            if (entity != null && contentType.contains("text/html")) {
-                content = EntityUtils.toString(entity);
-            }
+
+            String content = entity != null && contentType.contains("text/html")
+                    ? EntityUtils.toString(entity)
+                    : null;
 
             Optional<String> hub = Optional.empty();
             Optional<String> topic = Optional.empty();
 
-            // Check if the headers contain the WebSub links
-            for (Header h : linkHeaders) {
-                if (h.getValue().endsWith("rel=\"hub\"")) {
-                    hub = Optional.of(h.getValue().substring(1, h.getValue().indexOf('>')));
+            // Parse the Link headers
+            for (Header header : linkHeaders) {
+                Map<String, String> links = parseLinkHeader(header.getValue());
+                if (links.containsKey("hub")) {
+                    hub = Optional.of(links.get("hub"));
                 }
-                if (h.getValue().endsWith("rel=\"self\"")) {
-                    topic = Optional.of(h.getValue().substring(1, h.getValue().indexOf('>')));
+                if (links.containsKey("self")) {
+                    topic = Optional.of(links.get("self"));
+                }
+                if (hub.isPresent() && topic.isPresent()) {
+                    break;
                 }
             }
 
@@ -88,22 +91,10 @@ public class WebSubThingArtifact extends ThingArtifact {
                 return;
             }
 
-            // Check if the content contains the WebSub links
-            if (!hub.isPresent() && !topic.isPresent() && contentType.contains("text/html")) {
-                Pattern hubPattern = Pattern.compile("<link rel=\"hub\" href=\"([^\"]+)\">");
-                Pattern selfPattern = Pattern.compile("<link rel=\"self\" href=\"([^\"]+)\">");
-                Matcher hubMatcher = hubPattern.matcher(content);
-                Matcher selfMatcher = selfPattern.matcher(content);
-
-                if (hubMatcher.find()) {
-                    String hubHref = hubMatcher.group(1);
-                    hub = Optional.of(hubHref);
-                }
-
-                if (selfMatcher.find()) {
-                    String selfHref = selfMatcher.group(1);
-                    topic = Optional.of(selfHref);
-                }
+            // Parse the HTML content if headers did not contain the links
+            if (content != null) {
+                hub = extractLinkFromContent(content, "<link rel=\"hub\" href=\"([^\"]+)\">");
+                topic = extractLinkFromContent(content, "<link rel=\"self\" href=\"([^\"]+)\">");
             }
 
             if (hub.isPresent() && topic.isPresent()) {
@@ -114,6 +105,31 @@ public class WebSubThingArtifact extends ThingArtifact {
         } catch (IOException | ParseException e) {
             e.printStackTrace();
         }
+    }
+
+    private Map<String, String> parseLinkHeader(String headerValue) {
+        Map<String, String> links = new HashMap<>();
+        String[] parts = headerValue.split(",\\s*<");
+        for (String part : parts) {
+            String[] linkAndRel = part.split(">;\\s*rel=\"");
+            if (linkAndRel.length == 2) {
+                String url = linkAndRel[0].replace("<", "");
+                String rel = linkAndRel[1].replace("\"", "");
+                if ("hub".equals(rel) || "self".equals(rel)) {
+                    links.put(rel, url);
+                }
+            }
+        }
+        return links;
+    }
+
+    private Optional<String> extractLinkFromContent(String content, String regex) {
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(content);
+        if (matcher.find()) {
+            return Optional.of(matcher.group(1));
+        }
+        return Optional.empty();
     }
 
 }
