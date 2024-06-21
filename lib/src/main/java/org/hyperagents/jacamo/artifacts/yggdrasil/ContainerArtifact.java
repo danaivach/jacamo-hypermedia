@@ -12,6 +12,7 @@ import org.eclipse.rdf4j.model.Resource;
 import org.eclipse.rdf4j.model.ValueFactory;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
 import org.eclipse.rdf4j.model.util.Models;
+import org.hyperagents.jacamo.artifacts.hmas.HMAS;
 import org.hyperagents.jacamo.artifacts.wot.WebSubThingArtifact;
 
 import cartago.LINK;

@@ -1,4 +1,4 @@
-package org.hyperagents.jacamo.artifacts.yggdrasil;
+package org.hyperagents.jacamo.artifacts.hmas;
 
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
