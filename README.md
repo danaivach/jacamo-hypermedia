@@ -33,7 +33,7 @@ For the library's version, you can reference any available release tags or the m
 above. Referencing the main branch will access the latest developments, but a release tag would
 typically point to a more stable version.
 
-## Examples, Development and Testing
+## Examples, Development, and Testing
 
 This repository includes [examples](examples/) that illustrate how to use the provided artifacts in
 your JaCaMo application. In addition, if you wish to contribute to this library, the examples provide
@@ -49,9 +49,16 @@ To run the default example on Mac OS and Linux (use the appropriate Gradle wrapp
  ./gradlew examples:run
 ```
 
+To run a specific example, you can specify the corresponding JaCaMo project file from the [examples](examples/)
+folder as follows:
+
+```
+./gradlew examples:run -PjcmFile=my_jacamo_application.jcm
+```
+
 #### WebSub Example
 
-Before the WebSub example can be run a local Yggdrasil instance must be set up with the following configuration,
+Before the WebSub example can be run, a local Yggdrasil instance must be set up with the configuration shown below.
 A tutorial on how to set up a local Yggdrasil can be found [here](https://github.com/Interactions-HSG/yggdrasil-dev-template).
 
 ##### Yggdrasil Configuration:
@@ -98,13 +105,13 @@ You can now run the WebSub example on Mac OS and Linux (use the appropriate Grad
 First, run the observer agent:
 
 ```
- ./gradlew runWebSubObserver
+ ./gradlew examples:runWebSubObserver
 ```
 
 Then run the WebSub example:
 
 ```
- ./gradlew runWebSubExample
+ ./gradlew examples:runWebSubExample
 ```
 
 The counter agent will create a `CounterArtifact` in Workspace `103` and start to count to 3.
