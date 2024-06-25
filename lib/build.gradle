@@ -18,14 +18,18 @@ repositories {
     mavenCentral()
 
     maven { url "https://raw.github.com/jacamo-lang/mvn-repo/master" }
+    maven { url "https://repo.gradle.org/gradle/libs-releases/" }
+    maven { url "https://repo.gradle.org/gradle/libs-releases-local/" }
     maven { url 'https://jitpack.io' }
 }
 
 dependencies {
-    implementation group: 'org.jacamo', name: 'jacamo', version: '0.9-SNAPSHOT'
-    implementation group: 'com.github.Interactions-HSG', name: 'wot-td-java', version: 'master-SNAPSHOT'
+    implementation 'org.jacamo:jacamo:1.2.3'
+    implementation 'com.github.Interactions-HSG:wot-td-java:master-SNAPSHOT'
+    implementation 'org.eclipse.rdf4j:rdf4j-runtime:3.2.1'
 
     implementation 'org.apache.httpcomponents.client5:httpclient5-fluent:5.0'
+    implementation 'org.eclipse.jetty.aggregate:jetty-all:9.0.0.RC2'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'com.google.code.gson:gson:2.8.6'

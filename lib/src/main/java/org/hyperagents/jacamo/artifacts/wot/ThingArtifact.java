@@ -9,11 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.apache.hc.client5.http.fluent.Request;
-import org.apache.hc.core5.http.Header;
-
 import cartago.Artifact;
-import cartago.LINK;
 import cartago.OPERATION;
 import cartago.OpFeedbackParam;
 import ch.unisg.ics.interactions.wot.td.ThingDescription;
@@ -354,7 +350,7 @@ public class ThingArtifact extends Artifact {
   @SuppressWarnings("unchecked")
   private void readPayloadWithSchema(TDHttpResponse response, DataSchema schema,
       Object[] tags, OpFeedbackParam<Object[]> output) {
-  
+
     switch (schema.getDatatype()) {
       case DataSchema.BOOLEAN:
         output.set(new Boolean[] { response.getPayloadAsBoolean() });
