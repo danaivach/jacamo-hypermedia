@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
  *
  * Contributors:
  * - Andrei Ciortea (author), Interactions-HSG, University of St. Gallen
- * - Valentin Berger, Interactions-HSG, University of St. Gallen
+ * - Valentin Berger, Interactions-HSG, University of St.Gallen
  *
  */
 public class WebSubThingArtifact extends ThingArtifact {

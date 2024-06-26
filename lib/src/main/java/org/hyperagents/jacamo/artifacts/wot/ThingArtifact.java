@@ -34,13 +34,14 @@ import ch.unisg.ics.interactions.wot.td.vocabularies.WoTSec;
  * compose and issue HTTP requests for the exposed affordances.
  *
  * Contributors:
- * - Andrei Ciortea (author), Interactions-HSG, University of St. Gallen
+ * - Andrei Ciortea (author), Interactions-HSG, University of St.Gallen
  *
  */
 public class ThingArtifact extends Artifact {
   private static final String WEBID_PREFIX = "http://hyperagents.org/";
 
   protected ThingDescription td;
+  protected Optional<String> agentWebId;
   protected boolean dryRun;
   private Optional<String> apiKey;
 
@@ -62,6 +63,7 @@ public class ThingArtifact extends Artifact {
       failed(e.getMessage());
     }
 
+    this.agentWebId = Optional.empty();
     this.apiKey = Optional.empty();
     this.dryRun = false;
   }
@@ -76,6 +78,16 @@ public class ThingArtifact extends Artifact {
   public void init(String url, boolean dryRun) {
     init(url);
     this.dryRun = dryRun;
+  }
+
+  /**
+   * CArtAgO operation for setting the WebID of an operating agent using the artifact.
+   *
+   * @param webId The operating agent's WebID as a string.
+   */
+  @OPERATION
+  public void setOperatorWebId(String webId) {
+    this.agentWebId = Optional.of(webId);
   }
 
   /**
@@ -138,6 +150,23 @@ public class ThingArtifact extends Artifact {
     }
   }
 
+
+  @OPERATION
+  public void invokeAction(String actionTag) {
+    invokeAction(actionTag, new Object[0], new Object[0]);
+  }
+
+  @OPERATION
+  public void invokeActionWithIntegerOutput(String semanticType, OpFeedbackParam<Integer> output) {
+    OpFeedbackParam<Object[]> payload = new OpFeedbackParam<>();
+    invokeAction(semanticType, new Object[0], new Object[0], payload);
+
+    Object[] result = payload.get();
+    if (result.length > 0) {
+      output.set((Integer.valueOf((String) result[0])));
+    }
+  }
+
   /**
    * CArtAgO operation for invoking an action on a Thing using a semantic model of the Thing.
    *
@@ -149,11 +178,6 @@ public class ThingArtifact extends Artifact {
     invokeAction(actionTag, new Object[0], payload);
   }
 
-  @OPERATION
-  public void invokeAction(String semanticType) {
-    invokeAction(semanticType, new Object[0], new Object[0]);
-  }
-
   /**
    * CArtAgO operation for invoking an action on a Thing using a semantic model of the Thing.
    *
@@ -163,36 +187,7 @@ public class ThingArtifact extends Artifact {
    */
   @OPERATION
   public void invokeAction(String actionTag, Object[] payloadTags, Object[] payload) {
-    //validateParameters(actionTag, payloadTags, payload);
-
-    Optional<ActionAffordance> action = td.getFirstActionBySemanticType(actionTag);
-
-    if (!action.isPresent()) {
-      action = td.getActionByName(actionTag);
-    }
-
-    if (action.isPresent()) {
-      Optional<Form> form = action.get().getFirstForm();
-
-      if (!form.isPresent()) {
-        // Should not happen (an exception will be raised by the TD library first)
-        failed("Invalid TD: the invoked action does not have a valid form.");
-      }
-
-      Optional<DataSchema> inputSchema = action.get().getInputSchema();
-      if (!inputSchema.isPresent() && payload.length > 0) {
-        failed("This type of action does not take any input: " + actionTag);
-      }
-
-      Optional<TDHttpResponse> response = executeRequest(TD.invokeAction, form.get(), inputSchema,
-          payloadTags, payload);
-
-      if (response.isPresent() && !requestSucceeded(response.get().getStatusCode())) {
-        failed("Status code: " + response.get().getStatusCode());
-      }
-    } else {
-      failed("Unknown action: " + actionTag);
-    }
+    invokeAction(actionTag, payloadTags, payload, null);
   }
 
   /**
@@ -201,11 +196,11 @@ public class ThingArtifact extends Artifact {
    * @param actionTag Either an IRI that identifies the action type, or the action's name.
    * @param payloadTags A list of IRIs or object property names (used for object schema payloads).
    * @param payload The payload to be issued when invoking the action.
-   * @param outputTags A list of IRIs or object property names (used for the output schema)
    * @param output The list of values of the response payload.
    */
   @OPERATION
-  public void invokeAction(String actionTag, Object[] payloadTags, Object[] payload, Object[] outputTags, OpFeedbackParam<Object[]> output) {
+  public void invokeAction(String actionTag, Object[] payloadTags, Object[] payload,
+      OpFeedbackParam<Object[]> output) {
     //validateParameters(actionTag, payloadTags, payload);
 
     Optional<ActionAffordance> action = td.getFirstActionBySemanticType(actionTag);
@@ -234,7 +229,9 @@ public class ThingArtifact extends Artifact {
         if (!requestSucceeded(response.get().getStatusCode())) {
           failed("Status code: " + response.get().getStatusCode());
         } else if (action.get().getOutputSchema().isPresent()) {
-          readPayloadWithSchema(response.get(), action.get().getOutputSchema().get(), outputTags, output);
+          readPayloadWithSchema(response.get(), action.get().getOutputSchema().get(), output);
+        } else if (output != null) {
+          readPayloadWithSchema(response.get(), DataSchema.getEmptySchema(), output);
         }
       }
     } else {
@@ -349,13 +346,14 @@ public class ThingArtifact extends Artifact {
 
   @SuppressWarnings("unchecked")
   private void readPayloadWithSchema(TDHttpResponse response, DataSchema schema,
-      Object[] tags, OpFeedbackParam<Object[]> output) {
+      OpFeedbackParam<Object[]> output) {
 
     switch (schema.getDatatype()) {
       case DataSchema.BOOLEAN:
         output.set(new Boolean[] { response.getPayloadAsBoolean() });
         break;
       case DataSchema.STRING:
+      case DataSchema.DATA:
         output.set(new String[] { response.getPayloadAsString() });
         break;
       case DataSchema.INTEGER:
@@ -481,6 +479,8 @@ public class ThingArtifact extends Artifact {
         return executeRequestObjectPayload(operationType, form, schema.get(), tags, payload);
       } else if (payload.length == 1 && !(payload[0] instanceof Object[])) {
         return executeRequestPrimitivePayload(operationType, form, schema.get(), payload[0]);
+      } else if (payload.length == 1 && (payload[0] instanceof Object[])) {
+        return executeRequestArrayPayload(operationType, form, schema.get(), (Object []) payload[0]);
       } else if (payload.length >= 1) {
         return executeRequestArrayPayload(operationType, form, schema.get(), payload);
       } else {
@@ -536,8 +536,12 @@ public class ThingArtifact extends Artifact {
     }
 
     // Set a header with the id of the operating agent
-    request.addHeader("X-Agent-WebID", WEBID_PREFIX + getCurrentOpAgentId().getAgentName());
-    log("operating agent: " + getCurrentOpAgentId().getAgentName());
+    if (agentWebId.isPresent()) {
+      request.addHeader("X-Agent-WebID", agentWebId.get());
+    } else {
+      request.addHeader("X-Agent-WebID", WEBID_PREFIX + getCurrentOpAgentId().getAgentName());
+    }
+    request.addHeader("X-Agent-LocalName", getCurrentOpAgentId().getAgentName());
 
     if (this.dryRun) {
       log(request.toString());
