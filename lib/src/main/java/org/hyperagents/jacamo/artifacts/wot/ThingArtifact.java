@@ -163,7 +163,7 @@ public class ThingArtifact extends Artifact {
 
     Object[] result = payload.get();
     if (result.length > 0) {
-      output.set((Integer.valueOf((String) result[0])));
+      output.set(((Integer) result[0]));
     }
   }
 
