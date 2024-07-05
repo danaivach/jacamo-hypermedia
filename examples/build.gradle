@@ -13,9 +13,6 @@ apply plugin: 'eclipse'
 version '0.0.1'
 group   'org.jacamo'
 
-sourceCompatibility = 21
-targetCompatibility = 21
-
 repositories {
     mavenCentral()
 
