@@ -1,18 +1,10 @@
 package org.hyperagents.jacamo.artifacts.yggdrasil;
 
-import java.io.IOException;
-import java.util.AbstractQueue;
-import java.util.Enumeration;
-import java.util.Hashtable;
-import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.stream.Collectors;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
-import org.apache.http.HttpStatus;
+import cartago.Artifact;
+import cartago.ArtifactId;
+import cartago.INTERNAL_OPERATION;
+import cartago.OPERATION;
+import org.apache.hc.core5.http.HttpStatus;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.util.StringContentProvider;
@@ -20,10 +12,13 @@ import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.AbstractHandler;
 
-import cartago.Artifact;
-import cartago.ArtifactId;
-import cartago.INTERNAL_OPERATION;
-import cartago.OPERATION;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.stream.Collectors;
 
 /**
  * NotificationServerArtifact is an artifact that acts as a server for receiving
@@ -45,26 +40,33 @@ public class NotificationServerArtifact extends Artifact {
     private Server server;
     private boolean httpServerRunning;
 
-    public static final int NOTIFICATION_DELIVERY_DELAY = 100;
+  public static final int NOTIFICATION_DELIVERY_DELAY = 100;
+  protected Optional<String> agentWebId;
 
     void init(String host, Integer port) {
-        StringBuilder callbackBuilder = new StringBuilder("http://").append(host);
+      this.agentWebId = Optional.empty();
+      StringBuilder callbackBuilder = new StringBuilder("http://").append(host);
 
-        if (port != null) {
-            callbackBuilder.append(":")
-                    .append(Integer.valueOf(port));
-        }
+      if (port != null) {
+        callbackBuilder.append(":")
+          .append(port);
+      }
 
-        callbackUri = callbackBuilder.append("/notifications/").toString();
+      callbackUri = callbackBuilder.append("/notifications/").toString();
 
-        server = new Server(port);
-        server.setHandler(new NotificationHandler());
+      server = new Server(port);
+      server.setHandler(new NotificationHandler());
 
-        artifactRegistry = new Hashtable<String, ArtifactId>();
-        notifications = new ConcurrentLinkedQueue<Notification>();
+      artifactRegistry = new Hashtable<String, ArtifactId>();
+      notifications = new ConcurrentLinkedQueue<Notification>();
     }
 
-    /**
+  @OPERATION
+  public void setOperatorWebId(String webId) {
+    this.agentWebId = Optional.of(webId);
+  }
+
+  /**
      * Registers an artifact for WebSub and sends a subscribe request to the
      * specified hub.
      *
@@ -80,7 +82,7 @@ public class NotificationServerArtifact extends Artifact {
 
     /**
      * Registers an artifact for focus in the workspace and sends a focus request.
-     * 
+     *
      * @param workspaceIRI The IRI of the workspace.
      * @param artifactIRI  The IRI of the artifact.
      * @param artifactId   The ID of the artifact.
@@ -186,15 +188,16 @@ public class NotificationServerArtifact extends Artifact {
         try {
             client.start();
 
-            ContentResponse response = client.POST(workspaceIRI + "/focus")
-                    .header("X-Agent-WebID",
-                            "http://localhost:8080/agents/" + this.getCurrentOpAgentId().getAgentName())
+          String agentWebIdHeaderValue = this.agentWebId
+            .orElse("http://localhost:8080/agents/" + this.getCurrentOpAgentId().getAgentName());
+
+          ContentResponse response = client.POST(workspaceIRI + "/focus")
+            .header("X-Agent-WebID", agentWebIdHeaderValue)
                     .content(new StringContentProvider("{"
                             + "\"artifactName\" : \"" + artifactName + "\","
                             + "\"callbackIri\" : \"" + callbackUri + "\""
                             + "}"), "application/json")
                     .send();
-
             if (response.getStatus() != HttpStatus.SC_OK) {
                 log("Request failed: " + response.getStatus());
             }

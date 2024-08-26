@@ -1,37 +1,24 @@
 package org.hyperagents.jacamo.artifacts.yggdrasil;
 
 import cartago.LINK;
-import cartago.OPERATION;
+import ch.unisg.ics.interactions.hmas.core.hostables.AbstractResource;
 import ch.unisg.ics.interactions.hmas.core.vocabularies.CORE;
-import ch.unisg.ics.interactions.wot.td.ThingDescription;
-import ch.unisg.ics.interactions.wot.td.ThingDescription.TDFormat;
-import ch.unisg.ics.interactions.wot.td.io.TDGraphReader;
+import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
+import ch.unisg.ics.interactions.hmas.interaction.signifiers.ResourceProfile;
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.ValueFactory;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
 import org.eclipse.rdf4j.model.util.Models;
 import org.eclipse.rdf4j.model.vocabulary.RDF;
-import org.hyperagents.jacamo.artifacts.wot.WebSubThingArtifact;
+import org.hyperagents.jacamo.artifacts.hmas.WebSubResourceArtifact;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
-/**
- * A hypermedia artifact that can contain other artifacts. The containment
- * relation is given by
- * {@code eve:contains}. Contained artifacts are exposed as observable
- * properties using by default
- * the Jason functor "member" or one that is passed as an argument during
- * artifact initialization.
- *
- * Contributors:
- * - Andrei Ciortea (author), Interactions-HSG, University of St.Gallen
- *
- */
-public class WorkspaceThingArtifact extends WebSubThingArtifact {
+public class WorkspaceResourceArtifact extends WebSubResourceArtifact {
   private IRI workspaceIRI;
   private Model graph;
   private ValueFactory rdf;
@@ -49,18 +36,11 @@ public class WorkspaceThingArtifact extends WebSubThingArtifact {
     exposeMemberProperties();
   }
 
-  @OPERATION
-  public void joinHypermediaWorkspace() {
-    if (td.getThingURI().isPresent() && td.getGraph().isPresent()) {
-      this.invokeAction("joinWorkspace");
-    }
-  }
-
   @LINK
   @Override
   public void onNotification(Notification notification) {
     try {
-      this.td = TDGraphReader.readFromString(TDFormat.RDF_TURTLE, notification.getMessage());
+      this.profile = ResourceProfileGraphReader.readFromString(notification.getMessage());
       exposeMemberProperties();
     } catch (Exception e) {
       e.printStackTrace();
@@ -68,28 +48,28 @@ public class WorkspaceThingArtifact extends WebSubThingArtifact {
   }
 
   private void exposeMemberProperties() {
-    if (td.getThingURI().isPresent() && td.getGraph().isPresent()) {
-      this.workspaceIRI = rdf.createIRI(td.getThingURI().get());
-      this.graph = td.getGraph().get();
+    if (profile.getResource().getIRI().isPresent() && ((AbstractResource) profile.getResource()).getGraph().isPresent()) {
+      this.workspaceIRI = profile.getResource().getIRI().get();
+      this.graph = profile.getGraph().get();
 
       // Extract parent workspaces (if any) from the workspace description
       List<String> parents = Models.objectIRIs(graph.filter(workspaceIRI, CORE.IS_CONTAINED_IN, null))
         .stream().map(iri -> iri.stringValue()).collect(Collectors.toList());
-      exposeProperties(parents, "parentHypermediaWorkspace");
+      exposeProperties(parents, "parentWorkspace");
 
       // Extract child workspaces (if any) from the workspace description
       List<String> workspaces = getMembersOfType(CORE.WORKSPACE);
-      exposeProperties(workspaces, "hypermediaWorkspace");
+      exposeProperties(workspaces, "workspace");
 
       // Extract artifacts (if any) from the workspace description
       List<String> artifacts = getMembersOfType(CORE.ARTIFACT);
-      exposeProperties(artifacts, "hypermediaArtifact");
+      exposeProperties(artifacts, "artifact");
     } else {
-      failed("Could not read RDF graph for container: " + td.getThingURI());
+      failed("Could not read RDF graph for container: " + profile.getResource().getIRI());
     }
   }
 
-/*
+  /*
   String writeToString(RDFFormat format, Model model) {
     OutputStream out = new ByteArrayOutputStream();
 
@@ -106,8 +86,7 @@ public class WorkspaceThingArtifact extends WebSubThingArtifact {
 
     return out.toString();
   }
-
- */
+   */
 
   private List<String> getMembersOfType(IRI memberType) {
     return Models.objectIRIs(graph.filter(workspaceIRI, CORE.CONTAINS, null))
@@ -118,7 +97,7 @@ public class WorkspaceThingArtifact extends WebSubThingArtifact {
 
   private void exposeProperties(List<String> list, String obsPropertyName) {
     for (String memberIRI : list) {
-      MemberMetadata data = new MemberMetadata(memberIRI);
+      WorkspaceResourceArtifact.MemberMetadata data = new WorkspaceResourceArtifact.MemberMetadata(memberIRI);
       if (getObsPropertyByTemplate(obsPropertyName, memberIRI, data.memberName) == null) {
         this.defineObsProperty(obsPropertyName, memberIRI, data.memberName,
           data.memberTypes.toArray(new String[0]));
@@ -135,13 +114,38 @@ public class WorkspaceThingArtifact extends WebSubThingArtifact {
       this.memberIRI = memberIri;
 
       try {
-        ThingDescription td = TDGraphReader.readFromURL(TDFormat.RDF_TURTLE, memberIRI);
-        memberName = td.getTitle();
-        memberTypes = Models.objectIRIs(td.getGraph().get().filter(rdf.createIRI(memberIRI), RDF.TYPE, null))
+        ResourceProfile profile = ResourceProfileGraphReader.readFromURL(memberIRI);
+        this.memberTypes = Models.objectIRIs(profile.getGraph().get().filter(rdf.createIRI(memberIRI), RDF.TYPE, null))
           .stream().map(iri -> iri.stringValue()).collect(Collectors.toList());
+        this.memberName = extractMemberName(this.memberIRI, this.memberTypes);
       } catch (IOException | NoSuchElementException e) {
         failed(e.getMessage());
       }
+    }
+
+    private String extractMemberName(String memberIRI, List<String> memberTypes) {
+      int startIndex = -1;
+      int endIndex = -1;
+
+      if (memberTypes.contains(CORE.WORKSPACE.stringValue())) {
+        startIndex = memberIRI.indexOf("workspaces/") + "workspaces/".length();
+        endIndex = memberIRI.indexOf("/#workspace", startIndex);
+      }
+      else if (memberTypes.contains(CORE.ARTIFACT.stringValue())) {
+        startIndex = memberIRI.indexOf("artifacts/") + "artifacts/".length();
+        endIndex = memberIRI.indexOf("/#artifact", startIndex);
+      }
+
+      String memberName = endIndex != -1 ? memberIRI.substring(startIndex, endIndex) : memberIRI.substring(startIndex);
+
+      memberName = memberName.replaceAll("[^a-zA-Z0-9_]", "");
+
+      // Ensure the result does not start with a number
+      if (memberName.isEmpty() || Character.isDigit(memberName.charAt(0))) {
+        return null;  // or return "" or "Invalid name"
+      }
+
+      return memberName;
     }
   }
 }
