@@ -21,8 +21,10 @@ public class TimeLogger extends Artifact {
   private Workbook workbook;
   private Sheet sheet;
   private long startTime;
+  private int signifiersNum;
 
-  public void init() {
+  public void init(int signifiersNum) {
+    this.signifiersNum = 1;
     if (Files.exists(Paths.get(FILE_NAME))) {
       try (FileInputStream fis = new FileInputStream(FILE_NAME)) {
         workbook = new XSSFWorkbook(fis);
@@ -35,10 +37,17 @@ public class TimeLogger extends Artifact {
       sheet = workbook.createSheet("Log");
       Row headerRow = sheet.createRow(0);
       Cell headerCell1 = headerRow.createCell(0);
-      headerCell1.setCellValue("Signifiers Num");
+      headerCell1.setCellValue("signifiers_num");
       Cell headerCell2 = headerRow.createCell(1);
-      headerCell2.setCellValue("Time in Seconds");
+      headerCell2.setCellValue("time_ms");
     }
+  }
+
+  // Start the timer
+  @LINK
+  @OPERATION
+  public void setSignifiersNum(int signifiersNum) {
+    this.signifiersNum = signifiersNum;
   }
 
   // Start the timer
@@ -52,15 +61,15 @@ public class TimeLogger extends Artifact {
   @LINK
   @OPERATION
   // Stop the timer and log the time interval
-  public void stopTimerAndLog(int signifiersNum) {
+  public void stopTimerAndLog() {
     long endTime = System.currentTimeMillis();
     long elapsedTimeInMillis = endTime - startTime;
 
-    logTime(signifiersNum, elapsedTimeInMillis);
+    logTime(elapsedTimeInMillis);
   }
 
   // Method to log time in the Excel sheet
-  private void logTime(int signifiersNum, long elapsedTimeInMillis) {
+  private void logTime(long elapsedTimeInMillis) {
     // Find the next empty row
     int rowNum = sheet.getLastRowNum() + 1;
     Row row = sheet.createRow(rowNum);
@@ -77,12 +86,6 @@ public class TimeLogger extends Artifact {
       workbook.write(fos);
     } catch (IOException e) {
       e.printStackTrace();
-    } finally {
-      try {
-        workbook.close();
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
     }
   }
 }

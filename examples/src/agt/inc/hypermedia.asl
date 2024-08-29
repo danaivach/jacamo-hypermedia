@@ -49,7 +49,7 @@
   ?workspace(WkspIRI, WkspNameStr);
 
   // Focus on the ResourceArtifact to observe its properties and events
-  //registerArtifactForFocus(WkspIRI, ArtIRI, ArtId, ArtName);
+  registerArtifactForFocus(WkspIRI, ArtIRI, ArtId, ArtName);
 
   .print("Created artifact ", ArtName, ", and registered for notifications").
 
@@ -58,7 +58,7 @@
 /* Workspaces */
 
 @workspace_instantiation_hmas
-+!makeMirroringWorkspace(WkspIRI, WkspName, WkspId) : ability("https://purl.org/hmas/HMASAbility") & web_id(WebId) <-
++!makeMirroringWorkspace(WkspIRI, WkspName, WkspId) : vocabulary("https://purl.org/hmas/") & web_id(WebId) <-
   makeArtifact(WkspName, "org.hyperagents.jacamo.artifacts.yggdrasil.WorkspaceResourceArtifact", [WkspIRI], WkspArtId)[wid(WkspId)];
   !registerNamespaces(WkspArtId);
   setOperatorWebId(WebId)[artifact_id(WkspArtId)].
@@ -81,7 +81,7 @@
   !registerForWebSub(WkspName, WkspArtIdTerm).
 
 @hypermedia_workspace_joining_hmas
-+!joinHypermediaWorkspace(WkspName, WkspArtId) : ability("https://purl.org/hmas/HMASAbility") & signifier(["jacamo:JoinWorkspace"]) <-
++!joinHypermediaWorkspace(WkspName, WkspArtId) : vocabulary("https://purl.org/hmas/") & signifier(["jacamo:JoinWorkspace"],_) <-
   invokeAction("jacamo:JoinWorkspace")[artifact_id(WkspArtId)].
 
 @hypermedia_workspace_joining_td
@@ -91,7 +91,7 @@
 /* Artifacts */
 
 @hypermedia_artifact_instantiation_hmas
-+!makeMirroringArtifact(ArtIRI, ArtName, ArtId, WkspId) : ability("https://purl.org/hmas/HMASAbility") & web_id(WebId) <-
++!makeMirroringArtifact(ArtIRI, ArtName, ArtId, WkspId) : vocabulary("https://purl.org/hmas/") & web_id(WebId) <-
   makeArtifact(ArtName, "org.hyperagents.jacamo.artifacts.hmas.WebSubResourceArtifact", [ArtIRI], ArtId)[wid(WkspId)];
   !registerNamespaces(ArtId);
   setOperatorWebId(WebId)[artifact_id(ArtId)].
@@ -114,7 +114,7 @@
 /* Namespaces */
 
 @namespace_belief_addition
-+!setNamespace(Prefix, Namespace) : ability("https://purl.org/hmas/HMASAbility") <-
++!setNamespace(Prefix, Namespace) : vocabulary("https://purl.org/hmas/") <-
   +namespace(Prefix, Namespace).
 
 @namespace_registration

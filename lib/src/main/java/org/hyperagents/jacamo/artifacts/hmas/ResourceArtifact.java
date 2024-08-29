@@ -3,17 +3,14 @@ package org.hyperagents.jacamo.artifacts.hmas;
 import cartago.Artifact;
 import cartago.OPERATION;
 import cartago.ObsProperty;
-import cartago.OperationException;
 import ch.unisg.ics.interactions.hmas.bindings.Action;
 import ch.unisg.ics.interactions.hmas.bindings.ActionExecution;
 import ch.unisg.ics.interactions.hmas.bindings.protocols.ProtocolBinding;
 import ch.unisg.ics.interactions.hmas.bindings.protocols.ProtocolBindings;
 import ch.unisg.ics.interactions.hmas.bindings.protocols.http.HttpAction;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
-import ch.unisg.ics.interactions.hmas.interaction.signifiers.ActionSpecification;
-import ch.unisg.ics.interactions.hmas.interaction.signifiers.Form;
-import ch.unisg.ics.interactions.hmas.interaction.signifiers.ResourceProfile;
-import ch.unisg.ics.interactions.hmas.interaction.signifiers.Signifier;
+import ch.unisg.ics.interactions.hmas.interaction.signifiers.*;
+import ch.unisg.ics.interactions.hmas.interaction.vocabularies.INTERACTION;
 import jason.asSyntax.ASSyntax;
 import jason.asSyntax.Structure;
 import org.eclipse.rdf4j.common.net.ParsedIRI;
@@ -24,10 +21,7 @@ import org.eclipse.rdf4j.model.util.Values;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -71,6 +65,8 @@ public class ResourceArtifact extends Artifact {
     this.namespaces = new HashMap<>();
     this.exposedSignifiers = new HashMap<>();
     this.dryRun = false;
+
+    defineObsProperty("exposureState", "inProgress");
     this.exposeSignifiers();
   }
 
@@ -96,54 +92,39 @@ public class ResourceArtifact extends Artifact {
    * Signifiers reveal information about the possible interactions offered by a resource.
    */
   void exposeSignifiers() {
+    getObsProperty("exposureState").updateValue("inProgress");
     for (Signifier signifier : this.profile.getExposedSignifiers()) {
-
       if (signifier.getIRIAsString().isPresent()) {
         String signifierIri = signifier.getIRIAsString().get();
         Set<String> actionTypes = signifier.getActionSpecification().getRequiredSemanticTypes();
+        Set<Ability> recommendedAbilities = signifier.getRecommendedAbilities();
 
-        Object[] curieActionTypes = actionTypes.stream()
+        List<String> curieActionTypes = actionTypes.stream()
           .map(this::getCurie)  // Apply getCurie to each element
-          .toArray();
+          .collect(Collectors.toList());
+
+        List<String> curieAbilities = recommendedAbilities.stream()
+          .map(a -> {
+            Set<String> abilityTypes = new HashSet<>(a.getSemanticTypes());
+            abilityTypes.remove(INTERACTION.ABILITY.stringValue());
+            return this.getCurie((String) abilityTypes.toArray()[0]);
+          })  // Apply getCurie to each element
+          .toList();
 
         if (!this.exposedSignifiers.containsKey(signifierIri)) {
-
           Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(signifierIri));
 
-          ObsProperty signifierProperty = this.defineObsProperty("signifier", curieActionTypes);
+          ObsProperty signifierProperty = this.defineObsProperty("signifier", curieActionTypes.toArray(),
+            curieAbilities.toArray());
           signifierProperty.addAnnot(iriAnnotation);
           this.exposedSignifiers.put(signifierIri, signifierProperty);
+
         } else {
-          this.exposedSignifiers.get(signifierIri).updateValue(0, curieActionTypes);
+          this.exposedSignifiers.get(signifierIri).updateValues(curieActionTypes.toArray(), curieAbilities.toArray());
         }
       }
-
-      /*
-      // Retrieve the recommended context
-      Set<Context> recommendedContexts = signifier.getRecommendedContexts();
-
-      // Retrieve the recommended abilities
-      Set<Ability> recommendedAbilities = signifier.getRecommendedAbilities();
-
-      // TODO Recommended contexts
-      //log("- Recommended contexts: " + recommendedBDIContexts);
-
-
-      // Handle the abilities by retrieve all of their types
-      List<String> recommendedAbilityTypes = recommendedAbilities.stream()
-        .flatMap(ability -> ability.getSemanticTypes().stream())
-        .collect(Collectors.toList());
-      //log("- Recommended abilities: " + recommendedAbilityTypes);
-       */
     }
-    try {
-      if (logTime) {
-        System.out.println("Starting timer");
-        execLinkedOp("out-1", "startTimer");
-      }
-    } catch (OperationException e) {
-      throw new RuntimeException(e);
-    }
+    getObsProperty("exposureState").updateValue("done");
   }
 
   /**
@@ -183,8 +164,8 @@ public class ResourceArtifact extends Artifact {
   @OPERATION
   public void invokeAction(String actionTag) {
     String resolvedActionTag = resolveCurie(actionTag);
-    Optional<Signifier> signifierOp = this.profile.getFirstExposedSignifier(resolvedActionTag);
 
+    Optional<Signifier> signifierOp = this.profile.getFirstExposedSignifier(resolvedActionTag);
 
     if (signifierOp.isPresent()) {
       Signifier signifier = signifierOp.get();
@@ -194,21 +175,22 @@ public class ResourceArtifact extends Artifact {
       ProtocolBinding binding = ProtocolBindings.getBinding(form);
       Action action = binding.bind(form);
 
-      if (this.agentWebId.isPresent()) {
-        action.setActorId(this.agentWebId.get());
-      }
+      this.agentWebId.ifPresent(action::setActorId);
 
       if (action instanceof HttpAction) {
         String agentName = this.getCurrentOpAgentId().getAgentName();
         ((HttpAction) action).setHeader("X-Agent-LocalName", agentName);
       }
 
-      try {
-        ActionExecution actionExec = action.execute();
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+      if (dryRun) {
+        System.out.println(action);
+      } else {
+        try {
+          ActionExecution actionExec = action.execute();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
-
     } else {
       failed("Unknown action: " + actionTag);
     }
@@ -229,7 +211,6 @@ public class ResourceArtifact extends Artifact {
     } catch (URISyntaxException e) {
       failed("Attempted to use an invalid IRI: " + iri);
     }
-
     return iri;
   }
 

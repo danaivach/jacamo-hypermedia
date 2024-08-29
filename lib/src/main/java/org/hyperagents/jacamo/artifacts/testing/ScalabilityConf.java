@@ -1,7 +1,6 @@
 package org.hyperagents.jacamo.artifacts.testing;
 
-import cartago.Artifact;
-import cartago.OPERATION;
+import cartago.*;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphWriter;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.*;
@@ -11,10 +10,20 @@ import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.util.StringContentProvider;
 import org.eclipse.jetty.http.HttpMethod;
+import org.eclipse.rdf4j.model.Namespace;
+import org.eclipse.rdf4j.model.impl.SimpleNamespace;
 
-import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Random;
+import java.util.stream.Collectors;
 
+@ARTIFACT_INFO(
+  outports = {
+    @OUTPORT(name = "conf-out")
+  }
+)
 public class ScalabilityConf extends Artifact {
 
   private static final String[] ACTIONS = {
@@ -30,47 +39,61 @@ public class ScalabilityConf extends Artifact {
     "Glyph", "Rune", "Mark", "Sigil", "Emblem", "Seal", "Insignia", "Crest", "Symbol", "Badge"
   };
 
-  private static final String[] ROMAN_SUFFIXES = {
-    "", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"
-  };
-
-  private static final String EX_NS = "https://example.org/";
+  private static final Namespace EX_NS = new SimpleNamespace("ex", "https://example.org/");
   private static final String WEB_ID = "https://example.org/env-manager";
-  private static final String REL_URI = "artifacts/test/";
 
   private ResourceProfile.Builder testProfileBuilder;
   private List<Signifier> allSignifiers;
-  private int signifierNum;
+
   private String envURL;
+  private String workspaceName;
+  private String artifactName;
+  private int signifierNum;
+  private int maxSignifierNum;
+  private boolean logTime;
 
   private final Random random = new Random();
 
-  public void init(String url, int signifierNum) {
-    this.signifierNum = signifierNum;
+  private static String getCurie(String str, Namespace ns) {
+    return str.replace(ns.getName(), ns.getPrefix() + ":");
+  }
+
+  public void init(String url, String workspaceName, String artifactName, int signifierNum, int maxSignifierNum, boolean logTime) {
     this.envURL = url;
+    this.artifactName = artifactName;
+    this.workspaceName = workspaceName;
+    this.signifierNum = signifierNum;
+    this.maxSignifierNum = maxSignifierNum;
+    this.logTime = logTime;
+
     this.testProfileBuilder = new ResourceProfile.Builder(new ch.unisg.ics.interactions.hmas.core.hostables.Artifact
       .Builder()
-      .setIRIAsString(this.envURL + "/" + REL_URI + "#artifact")
-      .addSemanticType(EX_NS + "SpellBook")
+      .setIRIAsString(this.envURL + "/artifacts/" + this.artifactName + "/#artifact")
+      .addSemanticType(EX_NS.getName() + "SpellBook")
       .build())
-      .setIRIAsString(this.envURL + "/" + REL_URI);
+      .setIRIAsString(this.envURL + "/artifacts/" + this.artifactName + "/");
 
     this.initAllSignifiers();
 
+    this.updateAgentSituation();
     this.publishEmptyProfile();
-
-
-    ResourceProfile profile = this.getUpdatedProfile();
-    this.updateAgentSituation(profile.getExposedSignifiers());
-    this.updatePublishedProfile(profile);
+    this.updatePublishedProfile(this.getUpdatedProfile());
   }
 
   @OPERATION
   private void increaseSignifiers() {
-    this.signifierNum++;
-    ResourceProfile profile = this.getUpdatedProfile();
-    this.updateAgentSituation(profile.getExposedSignifiers());
-    this.updatePublishedProfile(profile);
+    if (this.signifierNum < this.maxSignifierNum) {
+      this.signifierNum++;
+      this.updateAgentSituation();
+      try {
+        if (logTime) {
+          execLinkedOp("conf-out", "setSignifiersNum", signifierNum);
+        }
+      } catch (OperationException e) {
+        throw new RuntimeException(e);
+      }
+      this.updatePublishedProfile(this.getUpdatedProfile());
+    }
   }
 
   private void publishEmptyProfile() {
@@ -83,13 +106,13 @@ public class ScalabilityConf extends Artifact {
       ContentResponse response = client.POST(this.envURL + "/artifacts/")
         .content(new StringContentProvider(profileStr), "text/turtle")
         .header("X-Agent-WebID", WEB_ID)
-        .header("Slug", "test").send();
+        .header("Slug", this.artifactName).send();
 
       if (response.getStatus() != HttpStatus.SC_CREATED) {
         log("Request failed: " + response.getStatus());
       }
 
-      ResourceProfile profile = ResourceProfileGraphReader.readFromURL(this.envURL + "/" + REL_URI);
+      ResourceProfile profile = ResourceProfileGraphReader.readFromURL(this.envURL + "/artifacts/" + this.artifactName + "/");
       this.testProfileBuilder.exposeSignifiers(profile.getExposedSignifiers());
 
       client.stop();
@@ -104,7 +127,7 @@ public class ScalabilityConf extends Artifact {
     try {
       client.start();
 
-      ContentResponse response = client.newRequest(this.envURL + "/" + REL_URI + "#artifact")
+      ContentResponse response = client.newRequest(this.envURL + "/artifacts/" + this.artifactName + "/#artifact")
         .method(HttpMethod.PUT)
         .content(new StringContentProvider(profileStr), "text/turtle")
         .header("X-Agent-WebID", WEB_ID)
@@ -120,65 +143,79 @@ public class ScalabilityConf extends Artifact {
     }
   }
 
-  private void updateAgentSituation(Set<Signifier> exposedSignifiers) {
-    List<Signifier> exposedSignifiersLst = new ArrayList<>(exposedSignifiers);
-    int index = random.nextInt(exposedSignifiersLst.size());
-
-    // Return the signifier at the random index
-    Signifier randomSignifier = exposedSignifiersLst.get(index);
-
-    Iterator<Ability> abilitiesIt = randomSignifier.getRecommendedAbilities().iterator();
-    Ability ability = abilitiesIt.hasNext() ? abilitiesIt.next() : null;
-    if (ability != null) {
-      Set<String> abilityTypes = new HashSet<>(ability.getSemanticTypes());
-      abilityTypes.remove(INTERACTION.TERM.ABILITY.toString());
-
-      if (this.getObsProperty("ability") == null) {
-        this.defineObsProperty("ability", abilityTypes.toArray());
-      } else {
-        this.getObsProperty("ability").updateValue(abilityTypes.toArray());
-      }
+  private ResourceProfile getUpdatedProfile() {
+    if (signifierNum > 0) {
+      return this.testProfileBuilder
+        .exposeSignifier(this.allSignifiers.get(signifierNum-1))
+        .build();
     }
-
-    Iterator<String> actionTypesIt = randomSignifier.getActionSpecification().getRequiredSemanticTypes().iterator();
-    String goalActionType = actionTypesIt.hasNext() ? actionTypesIt.next() : null;
-
-    if (goalActionType != null) {
-      if (this.getObsProperty("goalActionType") == null) {
-        this.defineObsProperty("goalActionType", goalActionType);
-      } else {
-        this.getObsProperty("goalActionType").updateValue(goalActionType);
-      }
-    }
+    return this.testProfileBuilder.build();
   }
 
-  private ResourceProfile getUpdatedProfile() {
-    return this.testProfileBuilder
-      .exposeSignifier(this.allSignifiers.get(signifierNum-1))
-      .build();
+  @OPERATION
+  public void updateAgentSituation() {
+    System.out.println(signifierNum);
+    if (signifierNum > 0) {
+      List<Signifier> exposedSignifiers = this.allSignifiers.subList(0, signifierNum);
+      int index = random.nextInt(exposedSignifiers.size());
+
+      // Return the signifier at the random index
+      Signifier randomSignifier = exposedSignifiers.get(index);
+
+      Iterator<Ability> abilitiesIt = randomSignifier.getRecommendedAbilities().iterator();
+      Ability ability = abilitiesIt.hasNext() ? abilitiesIt.next() : null;
+
+      Iterator<String> actionTypesIt = randomSignifier.getActionSpecification().getRequiredSemanticTypes().iterator();
+      String knownActionType = actionTypesIt.hasNext() ? actionTypesIt.next() : null;
+
+      if (ability != null & knownActionType != null) {
+
+        Object[] prefixedAbilityTypes = ability.getSemanticTypes()
+          .stream()
+          .filter(type -> !type.equals(INTERACTION.TERM.ABILITY.toString()))
+          .map(type -> getCurie(type, EX_NS))
+          .collect(Collectors.toSet()).toArray();
+
+        String artifactId = "[artifact_name("
+          + this.artifactName + "), wsp("
+          + this.workspaceName + ")]";
+
+        String knownPlan = "@test_goal +!test_goal : ability(Ability) " +
+          "& signifier([\"" + getCurie(knownActionType, EX_NS) + "\"], [Ability])" +
+          "<- invokeAction(\"" + getCurie(knownActionType, EX_NS) + "\")" + artifactId + ". ";
+
+        if (this.getObsProperty("agent_metadata") == null) {
+          this.defineObsProperty("agent_metadata", knownPlan, prefixedAbilityTypes[0]);
+        } else {
+          this.getObsProperty("agent_metadata").updateValues(knownPlan, prefixedAbilityTypes[0]);
+        }
+      }
+    }
   }
 
   private void initAllSignifiers() {
     this.allSignifiers = new ArrayList<>();
 
-    for (int i = 0; i < ROMAN_SUFFIXES.length; i++) {
-      String level = ROMAN_SUFFIXES[i];
+    for (int level = 0; level < this.maxSignifierNum/10 ; level++) {
       for (int j = 0; j < BASE_ABILITIES.length; j++) {
         String action = ACTIONS[j];
         String ability = BASE_ABILITIES[j];
 
         ActionSpecification spec = new ActionSpecification.Builder(new Form
-          .Builder("http://localhost:8000/" + action.toLowerCase() + level.toLowerCase())
+          .Builder("http://localhost:8000/" + action.toLowerCase() + level)
           .setMethodName("POST")
           .build())
-          .addRequiredSemanticType(EX_NS + action)
+          .addRequiredSemanticType(EX_NS.getName() + action + level)
           .build();
 
-        Signifier sig = new Signifier.Builder(spec).addRecommendedAbility(new Ability
+        Signifier sig = new Signifier.Builder(spec)
+          .addRecommendedAbility(new Ability
             .Builder()
-            .addSemanticType(EX_NS + ability + level)
+            .addSemanticType(EX_NS.getName() + ability + level)
             .build())
-          .setIRIAsString(this.envURL + "/" + REL_URI + "#" + ACTIONS[j].toLowerCase() + level.toLowerCase())
+          .setIRIAsString(this.envURL + "/artifacts/" + this.artifactName + "/#"
+            + ACTIONS[j].toLowerCase()
+            + level)
           .build();
 
         this.allSignifiers.add(sig);

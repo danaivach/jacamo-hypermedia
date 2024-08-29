@@ -1,8 +1,7 @@
 package org.hyperagents.jacamo.artifacts.hmas;
 
-import cartago.ARTIFACT_INFO;
 import cartago.LINK;
-import cartago.OUTPORT;
+import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import org.apache.hc.client5.http.fluent.Request;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
@@ -18,11 +17,6 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@ARTIFACT_INFO(
-  outports = {
-    @OUTPORT(name = "out-1")
-  }
-)
 public class WebSubResourceArtifact extends ResourceArtifact {
 
   @Override
@@ -33,19 +27,22 @@ public class WebSubResourceArtifact extends ResourceArtifact {
 
   @LINK
   public void onNotification(Notification notification) {
-    log("The state of this ResourceArtifact has changed: " + notification.getMessage());
+    if ("text/turtle".equals(notification.getContentType())) {
+      this.profile = ResourceProfileGraphReader.readFromString(notification.getMessage());
+      this.exposeSignifiers();
+    }
+    else if ("application/json".equals(notification.getContentType())) {
+      log("The state of this ResourceArtifact has changed: " + notification.getMessage());
+      String obsProp = notification.getMessage();
+      String functor = obsProp.substring(0, obsProp.indexOf("("));
+      String[] params = obsProp.substring(obsProp.indexOf("(") + 1, obsProp.length() - 1)
+        .split(",");
 
-    this.exposeSignifiers();
-
-    String obsProp = notification.getMessage();
-    String functor = obsProp.substring(0, obsProp.indexOf("("));
-    String[] params = obsProp.substring(obsProp.indexOf("(") + 1, obsProp.length() - 1)
-      .split(",");
-
-    if (this.hasObsPropertyByTemplate(functor, (Object[]) params)) {
-      this.updateObsProperty(functor, (Object[]) params);
-    } else {
-      this.defineObsProperty(functor, (Object[]) params);
+      if (this.hasObsPropertyByTemplate(functor, (Object[]) params)) {
+        this.updateObsProperty(functor, (Object[]) params);
+      } else {
+        this.defineObsProperty(functor, (Object[]) params);
+      }
     }
   }
 

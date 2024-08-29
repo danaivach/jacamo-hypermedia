@@ -1,8 +1,10 @@
 /* Initial beliefs and rules */
 
-ability("https://purl.org/hmas/HMASAbility").
+vocabulary("https://purl.org/hmas/").
 
 entry_url("http://172.27.52.55:8080/workspaces/61").
+
+env_name("61").
 
 /* Initial goals */
 
@@ -11,48 +13,45 @@ entry_url("http://172.27.52.55:8080/workspaces/61").
 /* Plans */
 
 @initialization
-+!start : entry_url(Url) <-
-  .print("hello world.");
++!start : entry_url(EnvUrl) & env_name(EnvName)<-
+  .print("hello world");
+
+  createWorkspace(EnvName);
+  !joinWorkspace(EnvName,_);
+
   !setNamespace("ex", "https://example.org/");
 
-  makeArtifact("conf", "org.hyperagents.jacamo.artifacts.testing.ScalabilityConf", [Url, 1], ConfId);
-
+  // Set logger and logger artifacts
+  makeArtifact("logger", "org.hyperagents.jacamo.artifacts.testing.TimeLogger", [0], LoggerId);
+  makeArtifact("conf", "org.hyperagents.jacamo.artifacts.testing.ScalabilityConf", [EnvUrl, EnvName, "test", 0, 1000, true], ConfId);
+  linkArtifacts(ConfId, "conf-out", LoggerId);
   focus(ConfId);
-  .wait(10000);
-  increaseSignifiers;
-  .wait(5000);
-  increaseSignifiers;
 
+  // Set WebId
   !set_up_web_id(WebId);
+
+  // Load environment 61
   makeArtifact("notification-server", "org.hyperagents.jacamo.artifacts.yggdrasil.NotificationServerArtifact", ["localhost", 8081], NotifServerId);
   setOperatorWebId(WebId)[artifact_id(NotifServerId)];
-  !load_environment(Url, "61").
+  start;
+  !load_environment(EnvUrl, "61").
 
-+setUpDone : true <- stopTimerAndLog(4).
-
-@logger_initialization
-+!set_up_logger(LoggerId) : true <-
-  makeArtifact("logger", "org.hyperagents.jacamo.artifacts.testing.TimeLogger", [], LoggerId).
+@testing[atomic]
++exposureState("done")[artifact_name(test)] : true <-
+  startTimer;
+  !test_goal;
+  stopTimerAndLog;
+  increaseSignifiers.
 
 @web_id_initialization
 +!set_up_web_id(WebId) : .my_name(AgentName) <-
  .concat("https://wiser-solid-xi.interactions.ics.unisg.ch/", AgentName, "/profile/card#me", WebId);
  +web_id(WebId).
 
-@hypermedia_artifact_instantiation_hmas_custom
-+!makeMirroringArtifact(ArtIRI, ArtName, ArtId, WkspId) : ability("https://purl.org/hmas/HMASAbility") & web_id(WebId) <-
-  makeArtifact(ArtName, "org.hyperagents.jacamo.artifacts.hmas.WebSubResourceArtifact", [ArtIRI], ArtId)[wid(WkspId)];
+@test_goal
++!test_goal : true <- .print("Initial plan").
 
-  // Set logger
-  !set_up_logger(LoggerId);
-  linkArtifacts(ArtId, "out-1", LoggerId);
-  setLogTime(true)[artifact_id(ArtId)];
-
-  !registerNamespaces(ArtId);
-  setOperatorWebId(WebId)[artifact_id(ArtId)];
-  -+setUpDone.
-
-
+{ include("inc/test_agent.asl") }
 { include("inc/hypermedia.asl") }
 { include("$jacamoJar/templates/common-cartago.asl") }
 { include("$jacamoJar/templates/common-moise.asl") }

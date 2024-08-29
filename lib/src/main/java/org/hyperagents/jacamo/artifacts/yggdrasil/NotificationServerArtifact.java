@@ -1,9 +1,6 @@
 package org.hyperagents.jacamo.artifacts.yggdrasil;
 
-import cartago.Artifact;
-import cartago.ArtifactId;
-import cartago.INTERNAL_OPERATION;
-import cartago.OPERATION;
+import cartago.*;
 import org.apache.hc.core5.http.HttpStatus;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
@@ -43,7 +40,8 @@ public class NotificationServerArtifact extends Artifact {
   public static final int NOTIFICATION_DELIVERY_DELAY = 100;
   protected Optional<String> agentWebId;
 
-    void init(String host, Integer port) {
+  void init(String host, Integer port) {
+
       this.agentWebId = Optional.empty();
       StringBuilder callbackBuilder = new StringBuilder("http://").append(host);
 
@@ -52,14 +50,18 @@ public class NotificationServerArtifact extends Artifact {
           .append(port);
       }
 
-      callbackUri = callbackBuilder.append("/notifications/").toString();
-
+      //callbackUri = callbackBuilder.append("/notifications/").toString();
       server = new Server(port);
+
+      String serverURIStr = server.getURI().toString();
+      String hostStr = serverURIStr.substring(0, serverURIStr.length() - 1);
+      callbackUri = hostStr + ":" + port + "/notifications/";
+
       server.setHandler(new NotificationHandler());
 
       artifactRegistry = new Hashtable<String, ArtifactId>();
       notifications = new ConcurrentLinkedQueue<Notification>();
-    }
+  }
 
   @OPERATION
   public void setOperatorWebId(String webId) {
@@ -172,9 +174,8 @@ public class NotificationServerArtifact extends Artifact {
                             + "\"hub.callback\" : \"" + callbackUri + "\""
                             + "}"), "application/json")
                     .send();
-
             if (response.getStatus() != HttpStatus.SC_OK) {
-                log("Request failed: " + response.getStatus());
+               // log("Request failed: " + response.getStatus());
             }
 
             client.stop();
@@ -233,8 +234,7 @@ public class NotificationServerArtifact extends Artifact {
             } else {
                 if (artifactRegistry.containsKey(artifactIRI)) {
                     String payload = request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
-
-                    notifications.add(new Notification(artifactIRI, payload));
+                    notifications.add(new Notification(artifactIRI, payload, baseRequest.getContentType()));
 
                     response.setStatus(HttpServletResponse.SC_OK);
                 } else {
