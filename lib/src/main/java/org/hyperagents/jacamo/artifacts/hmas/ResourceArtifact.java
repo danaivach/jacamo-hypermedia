@@ -1,8 +1,6 @@
 package org.hyperagents.jacamo.artifacts.hmas;
 
-import cartago.Artifact;
-import cartago.OPERATION;
-import cartago.ObsProperty;
+import cartago.*;
 import ch.unisg.ics.interactions.hmas.bindings.Action;
 import ch.unisg.ics.interactions.hmas.bindings.ActionExecution;
 import ch.unisg.ics.interactions.hmas.bindings.protocols.ProtocolBinding;
@@ -42,49 +40,40 @@ public class ResourceArtifact extends Artifact {
   protected Map<String, String> namespaces;
   protected Map<String, ObsProperty> exposedSignifiers;
   protected boolean dryRun;
+  protected Optional<ArtifactId> semId = Optional.empty();
 
-  protected boolean logTime;
+  public void init(String url, ArtifactId signifierManager) {
+    init(url, signifierManager, false);
+  }
 
-  /**
-   * Method called by CArtAgO to initialize the artifact. The hMAS Resource Profile used by this
-   * artifact is retrieved and parsed during initialization.
-   *
-   * @param url A URL that dereferences to an hMAS Resource Profile.
-   */
+  public void init(String url, ArtifactId signifierManager, boolean dryRun) {
+    initialize(url, signifierManager, dryRun);
+  }
+
+  public void init(String url, boolean dryRun) {
+    init(url, null, dryRun);
+  }
+
   public void init(String url) {
+    init(url, null, false);
+  }
+
+  private void initialize(String url, ArtifactId signifierManager, boolean dryRun) {
     try {
       profile = ResourceProfileGraphReader.readFromURL(url);
     } catch (IOException e) {
       failed(e.getMessage());
     }
 
-    this.logTime = false;
-
     this.agentWebId = Optional.empty();
     this.apiKey = Optional.empty();
     this.namespaces = new HashMap<>();
     this.exposedSignifiers = new HashMap<>();
-    this.dryRun = false;
+    this.semId = Optional.ofNullable(signifierManager);
+    this.dryRun = dryRun;
 
     defineObsProperty("exposureState", "inProgress");
     this.exposeSignifiers();
-  }
-
-  /**
-   * Method called by CArtAgO to initialize the artifact. The hMAS Resource Profile used by this
-   * artifact is retrieved and parsed during initialization.
-   *
-   * @param url    A URL that dereferences to an hMAS Resource Profile.
-   * @param dryRun When set to true, the requests are logged, but not executed.
-   */
-  public void init(String url, boolean dryRun) {
-    init(url);
-    this.dryRun = dryRun;
-  }
-
-  @OPERATION
-  public void setLogTime(boolean enabled) {
-    this.logTime = enabled;
   }
 
   /**
@@ -93,34 +82,43 @@ public class ResourceArtifact extends Artifact {
    */
   void exposeSignifiers() {
     getObsProperty("exposureState").updateValue("inProgress");
-    for (Signifier signifier : this.profile.getExposedSignifiers()) {
-      if (signifier.getIRIAsString().isPresent()) {
-        String signifierIri = signifier.getIRIAsString().get();
-        Set<String> actionTypes = signifier.getActionSpecification().getRequiredSemanticTypes();
-        Set<Ability> recommendedAbilities = signifier.getRecommendedAbilities();
+    if (this.semId.isPresent()) {
+      try {
+        execLinkedOp(this.semId.get(), "exposeSignifiers", this.profile.getExposedSignifiers());
+      } catch (OperationException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    else {
+      for (Signifier signifier : this.profile.getExposedSignifiers()) {
+        if (signifier.getIRIAsString().isPresent()) {
+          String signifierIri = signifier.getIRIAsString().get();
+          Set<String> actionTypes = signifier.getActionSpecification().getRequiredSemanticTypes();
+          Set<Ability> recommendedAbilities = signifier.getRecommendedAbilities();
 
-        List<String> curieActionTypes = actionTypes.stream()
-          .map(this::getCurie)  // Apply getCurie to each element
-          .collect(Collectors.toList());
+          List<String> curieActionTypes = actionTypes.stream()
+            .map(this::getCurie)  // Apply getCurie to each element
+            .collect(Collectors.toList());
 
-        List<String> curieAbilities = recommendedAbilities.stream()
-          .map(a -> {
-            Set<String> abilityTypes = new HashSet<>(a.getSemanticTypes());
-            abilityTypes.remove(INTERACTION.ABILITY.stringValue());
-            return this.getCurie((String) abilityTypes.toArray()[0]);
-          })  // Apply getCurie to each element
-          .toList();
+          List<String> curieAbilities = recommendedAbilities.stream()
+            .map(a -> {
+              Set<String> abilityTypes = new HashSet<>(a.getSemanticTypes());
+              abilityTypes.remove(INTERACTION.ABILITY.stringValue());
+              return this.getCurie((String) abilityTypes.toArray()[0]);
+            })  // Apply getCurie to each element
+            .toList();
 
-        if (!this.exposedSignifiers.containsKey(signifierIri)) {
-          Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(signifierIri));
+          if (!this.exposedSignifiers.containsKey(signifierIri)) {
+            Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(signifierIri));
 
-          ObsProperty signifierProperty = this.defineObsProperty("signifier", curieActionTypes.toArray(),
-            curieAbilities.toArray());
-          signifierProperty.addAnnot(iriAnnotation);
-          this.exposedSignifiers.put(signifierIri, signifierProperty);
+            ObsProperty signifierProperty = this.defineObsProperty("signifier", curieActionTypes.toArray(),
+              curieAbilities.toArray());
+            signifierProperty.addAnnot(iriAnnotation);
+            this.exposedSignifiers.put(signifierIri, signifierProperty);
 
-        } else {
-          this.exposedSignifiers.get(signifierIri).updateValues(curieActionTypes.toArray(), curieAbilities.toArray());
+          } else {
+            this.exposedSignifiers.get(signifierIri).updateValues(curieActionTypes.toArray(), curieAbilities.toArray());
+          }
         }
       }
     }

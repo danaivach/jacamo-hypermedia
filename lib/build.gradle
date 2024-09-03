@@ -43,7 +43,7 @@ dependencies {
 sourceSets {
     main {
         java {
-            srcDir 'src/main/java'
+          srcDir 'src/main/java'
         }
     }
     test {

@@ -1,5 +1,6 @@
 package org.hyperagents.jacamo.artifacts.hmas;
 
+import cartago.ArtifactId;
 import cartago.LINK;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import org.apache.hc.client5.http.fluent.Request;
@@ -20,8 +21,8 @@ import java.util.regex.Pattern;
 public class WebSubResourceArtifact extends ResourceArtifact {
 
   @Override
-  public void init(String url) {
-    super.init(url);
+  public void init(String url, ArtifactId signifierManager, boolean dryRun) {
+    super.init(url, signifierManager, dryRun);
     exposeWebSubIRIs(url);
   }
 
