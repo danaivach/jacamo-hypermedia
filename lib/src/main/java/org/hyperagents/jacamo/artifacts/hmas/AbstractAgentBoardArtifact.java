@@ -16,12 +16,8 @@ public abstract class AbstractAgentBoardArtifact extends ResourceArtifact {
   protected Set<Ability> abilities;
   protected IRI agentIRI;
 
-  public void init(String url, ArtifactId signifierManager, boolean dryRun) {
-    super.init(url, signifierManager, dryRun);
-
-    if (!(this.profile.getResource() instanceof Agent)) {
-      failed("An AgentBoard should be initialised based on the profile of an Agent");
-    }
+  public void init(String url, boolean dryRun) {
+    super.init(url, dryRun);
 
     if (!(this.profile.getResource() instanceof Agent)) {
       failed("An AgentBoard should be initialised based on the profile of an Agent");
