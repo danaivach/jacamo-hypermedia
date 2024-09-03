@@ -5,26 +5,16 @@ import cartago.LINK;
 import cartago.OPERATION;
 import ch.unisg.ics.interactions.hmas.core.hostables.AbstractResource;
 import ch.unisg.ics.interactions.hmas.core.hostables.Agent;
-import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
-import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphWriter;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.Ability;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.CapableAgent;
-import ch.unisg.ics.interactions.hmas.interaction.signifiers.ResourceProfile;
-import ch.unisg.ics.interactions.hmas.interaction.vocabularies.INTERACTION;
 import org.eclipse.rdf4j.model.IRI;
-import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
-import org.eclipse.rdf4j.rio.RDFFormat;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.*;
+import java.util.Set;
 
 public abstract class AbstractAgentBoardArtifact extends ResourceArtifact {
 
-  private Set<Ability> abilities;
-  private IRI agentIRI;
+  protected Set<Ability> abilities;
+  protected IRI agentIRI;
 
   public void init(String url, ArtifactId signifierManager, boolean dryRun) {
     super.init(url, signifierManager, dryRun);
