@@ -32,12 +32,6 @@ public class WebSubResourceArtifact extends ResourceArtifact {
     this.dryRun = dryRun;
   }
 
-  @Override
-  public void init(String url, ArtifactId signifierManager, boolean dryRun) {
-    this.semId = Optional.of(signifierManager);
-    init(url, dryRun);
-  }
-
   @LINK
   public void onNotification(Notification notification) {
     if ("text/turtle".equals(notification.getContentType())) {

@@ -63,11 +63,6 @@ public class ResourceArtifact extends Artifact {
     this.dryRun = dryRun;
   }
 
-  public void init(String url, ArtifactId signifierManager, boolean dryRun) {
-    this.semId = Optional.of(signifierManager);
-    init(url, dryRun);
-  }
-
   /**
    * CArtAgO operation for exposing hMAS signifiers to the belief base of the caller agent.
    * Signifiers reveal information about the possible interactions offered by a resource.
