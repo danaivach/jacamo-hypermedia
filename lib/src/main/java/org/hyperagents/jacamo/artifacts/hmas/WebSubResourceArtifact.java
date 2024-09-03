@@ -21,21 +21,21 @@ import java.util.regex.Pattern;
 public class WebSubResourceArtifact extends ResourceArtifact {
 
   @Override
-  public void init(String url, ArtifactId signifierManager, boolean dryRun) {
-    super.init(url, signifierManager, dryRun);
+  public void init(String url) {
+    super.init(url);
     exposeWebSubIRIs(url);
   }
 
   @Override
   public void init(String url, boolean dryRun) {
-    super.init(url, dryRun);
-    exposeWebSubIRIs(url);
+    init(url);
+    this.dryRun = dryRun;
   }
 
   @Override
-  public void init(String url) {
-    super.init(url, false);
-    exposeWebSubIRIs(url);
+  public void init(String url, ArtifactId signifierManager, boolean dryRun) {
+    this.semId = Optional.of(signifierManager);
+    init(url, dryRun);
   }
 
   @LINK

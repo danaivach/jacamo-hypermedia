@@ -42,23 +42,7 @@ public class ResourceArtifact extends Artifact {
   protected boolean dryRun;
   protected Optional<ArtifactId> semId = Optional.empty();
 
-  public void init(String url, ArtifactId signifierManager) {
-    init(url, signifierManager, false);
-  }
-
-  public void init(String url, ArtifactId signifierManager, boolean dryRun) {
-    initialize(url, signifierManager, dryRun);
-  }
-
-  public void init(String url, boolean dryRun) {
-    init(url, null, dryRun);
-  }
-
   public void init(String url) {
-    init(url, null, false);
-  }
-
-  private void initialize(String url, ArtifactId signifierManager, boolean dryRun) {
     try {
       profile = ResourceProfileGraphReader.readFromURL(url);
     } catch (IOException e) {
@@ -69,11 +53,19 @@ public class ResourceArtifact extends Artifact {
     this.apiKey = Optional.empty();
     this.namespaces = new HashMap<>();
     this.exposedSignifiers = new HashMap<>();
-    this.semId = Optional.ofNullable(signifierManager);
-    this.dryRun = dryRun;
-
+    this.dryRun = false;
     defineObsProperty("exposureState", "inProgress");
     this.exposeSignifiers();
+  }
+
+  public void init(String url, boolean dryRun) {
+    init(url);
+    this.dryRun = dryRun;
+  }
+
+  public void init(String url, ArtifactId signifierManager, boolean dryRun) {
+    this.semId = Optional.of(signifierManager);
+    init(url, dryRun);
   }
 
   /**
