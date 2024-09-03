@@ -26,12 +26,6 @@ public class WebSubResourceArtifact extends ResourceArtifact {
     exposeWebSubIRIs(url);
   }
 
-  @Override
-  public void init(String url, boolean dryRun) {
-    init(url);
-    this.dryRun = dryRun;
-  }
-
   @LINK
   public void onNotification(Notification notification) {
     if ("text/turtle".equals(notification.getContentType())) {
