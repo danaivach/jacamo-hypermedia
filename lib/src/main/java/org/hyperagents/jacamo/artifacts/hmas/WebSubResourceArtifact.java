@@ -28,12 +28,14 @@ public class WebSubResourceArtifact extends ResourceArtifact {
 
   @Override
   public void init(String url, boolean dryRun) {
-    init(url, null, dryRun);
+    super.init(url, dryRun);
+    exposeWebSubIRIs(url);
   }
 
   @Override
   public void init(String url) {
-    init(url, null, false);
+    super.init(url, false);
+    exposeWebSubIRIs(url);
   }
 
   @LINK
