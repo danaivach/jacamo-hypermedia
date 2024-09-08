@@ -24,8 +24,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.jacamo:jacamo:1.2.3'
-    implementation 'com.github.danaivach:hmas-java:main-SNAPSHOT'
+    implementation('com.github.danaivach:jacamo:refactor-event-filters-SNAPSHOT')
     implementation 'com.github.Interactions-HSG:wot-td-java:master-SNAPSHOT'
     implementation 'org.eclipse.rdf4j:rdf4j-model:5.0.2'
     implementation 'org.eclipse.rdf4j:rdf4j-rio-api:5.0.2'

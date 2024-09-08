@@ -4,8 +4,8 @@
 
 @environment_loading
  +!load_environment(EnvUrl, EnvName) : true <-
-   !setNamespace("jacamo", "https://purl.org/hmas/jacamo/");
    .print("Loading environment (entry point): ", EnvUrl);
+   !setNamespace("jacamo", "https://purl.org/hmas/jacamo/");
    +workspace(EnvUrl, EnvName).
 
 /* Mirror hypermedia workspaces as local CArtAgO workspaces */
@@ -14,11 +14,8 @@
 +workspace(WkspIRI, WkspName) : true <-
   .print("Discovered workspace (name: ", WkspName ,"): ", WkspIRI);
 
-  // Create a CArtAgO Workspace that will contain the hypermedia WorkspaceArtifact and its contained artifacts.
-   createWorkspace(WkspName);
-
-  // Join the CArtAgO Workspace
-  !joinWorkspace(WkspName, WkspId);
+ .term2string(WkspNameTerm, WkspName);
+  ?joinedWsp(WkspId, WkspNameTerm, _);
 
   // Create a hypermedia WorkspaceArtifact for this workspace.
   // Used for some operations (e.g., to create an artifact).
@@ -60,11 +57,12 @@
 @workspace_instantiation_hmas
 +!makeMirroringWorkspace(WkspIRI, WkspName, WkspId) : vocabulary("https://purl.org/hmas/") & web_id(WebId) <-
   makeArtifact(WkspName, "org.hyperagents.jacamo.artifacts.yggdrasil.WorkspaceResourceArtifact", [WkspIRI], WkspArtId)[wid(WkspId)];
+  .print("Registering namespaces for ", WkspName);
   !registerNamespaces(WkspArtId);
   setOperatorWebId(WebId)[artifact_id(WkspArtId)].
 
 @workspace_instantiation_wot
-+!makeMirroringWorkspace(WkspIRI,WkspName, WkspArtId, WkspId) : true <-
++!makeMirroringWorkspace(WkspIRI, WkspName, WkspId) : true <-
   makeArtifact(WkspName, "org.hyperagents.jacamo.artifacts.yggdrasil.WorkspaceThingArtifact", [WkspIRI], WkspArtId)[wid(WkspId)].
 
 @workspace_joining
@@ -113,19 +111,31 @@
 
 /* Namespaces */
 
-@namespace_belief_addition
-+!setNamespace(Prefix, Namespace) : vocabulary("https://purl.org/hmas/") <-
-  +namespace(Prefix, Namespace).
+@namespace_registry_instantiation
++?nsRegistry(RegistryId) : true <-
+  makeArtifact("nsRegistry", "org.hyperagents.jacamo.artifacts.hmas.NSRegistryArtifact", [], RegistryId);
+  +nsRegistry(RegistryId);
+  focus(RegistryId);
+  .print("Created namespace registry").
 
-@namespace_registration
+@artifactNamespaceRegistration
 +!registerNamespaces(ArtId) : true <-
+  ?nsRegistry(RegistryId);
   .findall(Prefix, namespace(Prefix, Namespace), Prefixes);
   !registerNamespaces(Prefixes, ArtId).
 
-@namespace_registration_end
+@artifact_namespace_registration_end
 +!registerNamespaces([], ArtId).
 
-@namespaces_registration_ongoing
+@artifact_namespaces_registration_ongoing
 +!registerNamespaces([Prefix | Prefixes], ArtId) : namespace(Prefix, Namespace) <-
   setNamespace(Prefix, Namespace)[artifact_id(ArtId)];
   !registerNamespaces(Prefixes, ArtId).
+
+@namespaceRegistration
++!setNamespace(Prefix, Namespace): true <-
+  ?nsRegistry(RegistryId);
+  setNamespace(Prefix, Namespace)[artifact_id(RegistryId)].
+
+
+

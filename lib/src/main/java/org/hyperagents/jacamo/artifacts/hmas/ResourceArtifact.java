@@ -14,7 +14,6 @@ import jason.asSyntax.Structure;
 import org.eclipse.rdf4j.common.net.ParsedIRI;
 import org.eclipse.rdf4j.model.Namespace;
 import org.eclipse.rdf4j.model.impl.SimpleNamespace;
-import org.eclipse.rdf4j.model.impl.ValidatingValueFactory;
 import org.eclipse.rdf4j.model.util.Values;
 
 import java.io.IOException;
@@ -37,10 +36,10 @@ public class ResourceArtifact extends Artifact {
   protected ResourceProfile profile;
   protected Optional<String> agentWebId;
   protected Optional<String> apiKey;
-  protected Map<String, String> namespaces;
   protected Map<String, ObsProperty> exposedSignifiers;
   protected boolean dryRun;
-  protected Optional<ArtifactId> semId = Optional.empty();
+  protected Map<String, String> namespaces;
+  private String exposureState;
 
   public void init(String url) {
     try {
@@ -51,9 +50,9 @@ public class ResourceArtifact extends Artifact {
 
     this.agentWebId = Optional.empty();
     this.apiKey = Optional.empty();
-    this.namespaces = new HashMap<>();
     this.exposedSignifiers = new HashMap<>();
     this.dryRun = false;
+    this.namespaces = new HashMap<>();
     defineObsProperty("exposureState", "inProgress");
     this.exposeSignifiers();
   }
@@ -63,58 +62,53 @@ public class ResourceArtifact extends Artifact {
     this.dryRun = dryRun;
   }
 
-  public void init(String url, ArtifactId signifierAdaptor, boolean dryRun) {
-    this.semId = Optional.of(signifierAdaptor);
-    init(url, dryRun);
-  }
-
   /**
    * CArtAgO operation for exposing hMAS signifiers to the belief base of the caller agent.
    * Signifiers reveal information about the possible interactions offered by a resource.
    */
   void exposeSignifiers() {
     getObsProperty("exposureState").updateValue("inProgress");
-    if (this.semId.isPresent()) {
-      try {
-        execLinkedOp(this.semId.get(), "exposeSignifiers", this.profile.getExposedSignifiers());
-      } catch (OperationException e) {
-        throw new RuntimeException(e);
-      }
-    }
-    else {
-      for (Signifier signifier : this.profile.getExposedSignifiers()) {
-        if (signifier.getIRIAsString().isPresent()) {
-          String signifierIri = signifier.getIRIAsString().get();
-          Set<String> actionTypes = signifier.getActionSpecification().getRequiredSemanticTypes();
-          Set<Ability> recommendedAbilities = signifier.getRecommendedAbilities();
+    for (Signifier signifier : this.profile.getExposedSignifiers()) {
+      if (signifier.getIRIAsString().isPresent()) {
+        String signifierIri = signifier.getIRIAsString().get();
+        Set<String> actionTypes = signifier.getActionSpecification().getRequiredSemanticTypes();
+        Set<Ability> recommendedAbilities = signifier.getRecommendedAbilities();
 
-          List<String> curieActionTypes = actionTypes.stream()
-            .map(this::getCurie)  // Apply getCurie to each element
-            .collect(Collectors.toList());
+        List<String> curieActionTypes = actionTypes.stream()
+          .map(this::getPrefixedIRI)  // Apply getCurie to each element
+          .collect(Collectors.toList());
 
-          List<String> curieAbilities = recommendedAbilities.stream()
-            .map(a -> {
-              Set<String> abilityTypes = new HashSet<>(a.getSemanticTypes());
-              abilityTypes.remove(INTERACTION.ABILITY.stringValue());
-              return this.getCurie((String) abilityTypes.toArray()[0]);
-            })  // Apply getCurie to each element
-            .toList();
+        List<String> curieAbilities = recommendedAbilities.stream()
+          .map(a -> {
+            Set<String> abilityTypes = new HashSet<>(a.getSemanticTypes());
+            abilityTypes.remove(INTERACTION.ABILITY.stringValue());
+            return this.getPrefixedIRI((String) abilityTypes.toArray()[0]);
+          })
+          .toList();
 
-          if (!this.exposedSignifiers.containsKey(signifierIri)) {
-            Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(signifierIri));
+        if (!this.exposedSignifiers.containsKey(signifierIri)) {
+          Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(signifierIri));
 
-            ObsProperty signifierProperty = this.defineObsProperty("signifier", curieActionTypes.toArray(),
-              curieAbilities.toArray());
-            signifierProperty.addAnnot(iriAnnotation);
-            this.exposedSignifiers.put(signifierIri, signifierProperty);
+          ObsProperty signifierProperty = this.defineObsProperty("signifier", curieActionTypes.toArray(),
+            curieAbilities.toArray());
+          signifierProperty.addAnnot(iriAnnotation);
+          this.exposedSignifiers.put(signifierIri, signifierProperty);
 
-          } else {
-            this.exposedSignifiers.get(signifierIri).updateValues(curieActionTypes.toArray(), curieAbilities.toArray());
-          }
+        } else {
+          this.exposedSignifiers.get(signifierIri).updateValues(curieActionTypes.toArray(), curieAbilities.toArray());
         }
       }
     }
     getObsProperty("exposureState").updateValue("done");
+  }
+
+  @GUARD
+  boolean exposureState(String state){
+    return this.exposureState.equals(state);
+  }
+
+  @OPERATION void updateExposureState(){
+    this.exposureState = "done";
   }
 
   /**
@@ -127,24 +121,12 @@ public class ResourceArtifact extends Artifact {
     this.agentWebId = Optional.of(webId);
   }
 
-  /**
-   * CArtAgO operation for setting namespaces for this artifact, so that the agent can
-   * use compact URIs upon using the artifact, e.g., use "saref:ToggleCommand" instead
-   * of "https://saref.etsi.org/core/ToggleCommand"
-   *
-   * @param prefix    The prefix of the namespace
-   * @param namespace The IRI of the namespace
-   */
   @OPERATION
   public void setNamespace(String prefix, String namespace) {
-    try {
-      new ValidatingValueFactory().createIRI(namespace);
-    } catch (IllegalArgumentException e) {
-      failed("IRIs of registered namespaces must be absolute. Invalid namespace: " + namespace);
-    }
     this.namespaces.put(prefix, namespace);
     this.exposeSignifiers();
   }
+
 
   /**
    * CArtAgO operation for invoking an action on a resource using a semantic model of the resource.
@@ -153,9 +135,9 @@ public class ResourceArtifact extends Artifact {
    */
   @OPERATION
   public void invokeAction(String actionTag) {
-    String resolvedActionTag = resolveCurie(actionTag);
 
-    Optional<Signifier> signifierOp = this.profile.getFirstExposedSignifier(resolvedActionTag);
+    actionTag = getResolvedIRI(actionTag);
+    Optional<Signifier> signifierOp = this.profile.getFirstExposedSignifier(actionTag);
 
     if (signifierOp.isPresent()) {
       Signifier signifier = signifierOp.get();
@@ -186,12 +168,39 @@ public class ResourceArtifact extends Artifact {
     }
   }
 
-  private String getCurie(String iri) {
+  /*
+  private String getPrefixedIri(String iri) {
+    if (nsRegistryId.isPresent()) {
+      OpFeedbackParam<String> prefixedIri = new OpFeedbackParam<>();
+      try {
+        execLinkedOp(this.nsRegistryId.get(), "prefixedIRI", iri, prefixedIri);
+        return prefixedIri.get();
+      } catch (OperationException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return iri;
+  }
 
+  private String getResolvedIri(String iri) {
+    if (nsRegistryId.isPresent()) {
+      OpFeedbackParam<String> resolvedIri = new OpFeedbackParam<>();
+      try {
+        execLinkedOp(this.nsRegistryId.get(), "resolvedIRI", iri, resolvedIri);
+        return resolvedIri.get();
+      } catch (OperationException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return iri;
+  }
+  */
+
+  private String getPrefixedIRI(String iri) {
     try {
       ParsedIRI parsedAbsoluteIri = new ParsedIRI(iri);
 
-      for (Map.Entry<String, String> nsEntry : namespaces.entrySet()) {
+      for (Map.Entry<String, String> nsEntry : this.namespaces.entrySet()) {
         ParsedIRI parsedNamespace = new ParsedIRI(nsEntry.getValue());
         ParsedIRI relativeIri = parsedNamespace.relativize(parsedAbsoluteIri);
         if (!parsedAbsoluteIri.equals(relativeIri)) {
@@ -199,14 +208,13 @@ public class ResourceArtifact extends Artifact {
         }
       }
     } catch (URISyntaxException e) {
-      failed("Attempted to use an invalid IRI: " + iri);
+      e.printStackTrace();
     }
     return iri;
   }
 
-  private String resolveCurie(String iri) {
-
-    Set<Namespace> nsSet = namespaces.entrySet().stream()
+  private String getResolvedIRI(String iri) {
+    Set<Namespace> nsSet = this.namespaces.entrySet().stream()
       .map(entry -> new SimpleNamespace(entry.getKey(), entry.getValue()))
       .collect(Collectors.toSet());
 

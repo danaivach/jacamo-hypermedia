@@ -1,21 +1,21 @@
 package org.hyperagents.jacamo.artifacts.yggdrasil;
 
 public class Notification {
-    private String entityIRI;
+    private String topic;
     private String message;
     private String contentType;
 
     /**
      * Represents a notification with an entity IRI and a message.
      */
-    public Notification(String entityIRI, String message, String contentType) {
-        this.entityIRI = entityIRI;
+    public Notification(String topic, String message, String contentType) {
+        this.topic = topic;
         this.message = message;
         this.contentType = contentType;
     }
 
-    public String getEntityIRI() {
-        return entityIRI;
+    public String getTopic() {
+        return topic;
     }
 
     public String getMessage() {

@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  *
  */
 public class NotificationServerArtifact extends Artifact {
-    private Map<String, ArtifactId> artifactRegistry;
+  private Map<Subscription, Set<ArtifactId>> artifactRegistry;
     private AbstractQueue<Notification> notifications;
 
     private String callbackUri;
@@ -59,7 +59,7 @@ public class NotificationServerArtifact extends Artifact {
 
       server.setHandler(new NotificationHandler());
 
-      artifactRegistry = new Hashtable<String, ArtifactId>();
+    artifactRegistry = new Hashtable<Subscription, Set<ArtifactId>>();
       notifications = new ConcurrentLinkedQueue<Notification>();
   }
 
@@ -76,93 +76,109 @@ public class NotificationServerArtifact extends Artifact {
      * @param artifactId  The ID of the artifact.
      * @param hubIRI      The IRI of the WebSub hub.
      */
-    @OPERATION
-    void registerArtifactForWebSub(String artifactIRI, ArtifactId artifactId, String hubIRI) {
-        artifactRegistry.put(artifactIRI, artifactId);
-        sendSubscribeRequest(hubIRI, artifactIRI);
+  @LINK
+  @OPERATION
+  void registerArtifactForWebSub(String artifactIRI, ArtifactId artifactId, String hubIRI) {
+    Subscription subscription = new Subscription(artifactIRI, hubIRI);
+    if (artifactRegistry.containsKey(subscription)) {
+      artifactRegistry.get(subscription).add(artifactId);
+    } else {
+      Set<ArtifactId> artifactIds = new HashSet<>();
+      artifactIds.add(artifactId);
+      artifactRegistry.put(subscription, artifactIds);
+      sendSubscribeRequest(hubIRI, artifactIRI);
     }
+  }
 
-    /**
-     * Registers an artifact for focus in the workspace and sends a focus request.
-     *
-     * @param workspaceIRI The IRI of the workspace.
-     * @param artifactIRI  The IRI of the artifact.
-     * @param artifactId   The ID of the artifact.
-     * @param artifactName The name of the artifact.
-     */
-    @OPERATION
-    void registerArtifactForFocus(String workspaceIRI, String artifactIRI, ArtifactId artifactId,
-            String artifactName) {
-        artifactRegistry.put(artifactIRI, artifactId);
-        sendFocusRequest(workspaceIRI, artifactName);
+  /**
+   * Registers an artifact for focus in the workspace and sends a focus request.
+   *
+   * @param workspaceIRI The IRI of the workspace.
+   * @param artifactIRI  The IRI of the artifact.
+   * @param artifactId   The ID of the artifact.
+   * @param artifactName The name of the artifact.
+   */
+  @OPERATION
+  void registerArtifactForFocus(String workspaceIRI, String artifactIRI, ArtifactId artifactId,
+                                String artifactName) {
+    Subscription subscription = new Subscription(artifactName, workspaceIRI);
+    if (artifactRegistry.containsKey(subscription)) {
+      artifactRegistry.get(subscription).add(artifactId);
+    } else {
+      Set<ArtifactId> artifactIds = new HashSet<>();
+      artifactIds.add(artifactId);
+      artifactRegistry.put(subscription, artifactIds);
+      sendFocusRequest(workspaceIRI, artifactName);
     }
+  }
 
-    /**
-     * Starts the notification server.
-     * This method sets the httpServerRunning flag to true, executes the internal
-     * operation "deliverNotifications",
-     * and starts the server.
-     * If an exception occurs, it will be printed to the standard error stream.
-     */
-    @OPERATION
-    void start() {
-        try {
-            httpServerRunning = true;
+  /**
+   * Starts the notification server.
+   * This method sets the httpServerRunning flag to true, executes the internal
+   * operation "deliverNotifications",
+   * and starts the server.
+   * If an exception occurs, it will be printed to the standard error stream.
+   */
+  @OPERATION
+  void start() {
+    try {
+      httpServerRunning = true;
 
-            execInternalOp("deliverNotifications");
+      execInternalOp("deliverNotifications");
 
-            server.start();
-        } catch (Exception e) {
+      server.start();
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+  /**
+   * Stops the notification server.
+   */
+  @OPERATION
+  void stop() {
+    try {
+      server.stop();
+      httpServerRunning = false;
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
+
+  /**
+   * Delivers notifications to registered artifacts.
+   * This method runs in an internal operation and continuously checks for
+   * notifications in the queue.
+   * If a notification is found, it retrieves the corresponding artifact and
+   * invokes the "onNotification" method on it.
+   * If an exception occurs during the invocation, it is printed to the standard
+   * error stream.
+   */
+  @INTERNAL_OPERATION
+  void deliverNotifications() {
+    while (httpServerRunning) {
+      while (!notifications.isEmpty()) {
+
+        Notification n = notifications.poll();
+
+        Set<ArtifactId> allArtifactIds = getSubscriberIds(n);
+
+        for (ArtifactId artifactId : allArtifactIds) {
+          try {
+
+            execLinkedOp(artifactId, "onNotification", n);
+
+          } catch (Exception e) {
             e.printStackTrace();
+          }
         }
+      }
+
+      await_time(NOTIFICATION_DELIVERY_DELAY);
     }
+  }
 
-    /**
-     * Stops the notification server.
-     */
-    @OPERATION
-    void stop() {
-        try {
-            server.stop();
-            httpServerRunning = false;
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * Delivers notifications to registered artifacts.
-     * This method runs in an internal operation and continuously checks for
-     * notifications in the queue.
-     * If a notification is found, it retrieves the corresponding artifact and
-     * invokes the "onNotification" method on it.
-     * If an exception occurs during the invocation, it is printed to the standard
-     * error stream.
-     */
-    @INTERNAL_OPERATION
-    void deliverNotifications() {
-        while (httpServerRunning) {
-            while (!notifications.isEmpty()) {
-                Notification n = notifications.poll();
-
-                ArtifactId artifactId = artifactRegistry.get(n.getEntityIRI());
-
-                if (artifactId != null) {
-                    try {
-
-                        execLinkedOp(artifactId, "onNotification", n);
-
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-
-            await_time(NOTIFICATION_DELIVERY_DELAY);
-        }
-    }
-
-    private void sendSubscribeRequest(String hubIRI, String artifactIRI) {
+  private void sendSubscribeRequest(String hubIRI, String artifactIRI) {
         HttpClient client = new HttpClient();
         try {
             client.start();
@@ -209,41 +225,60 @@ public class NotificationServerArtifact extends Artifact {
         }
     }
 
-    class NotificationHandler extends AbstractHandler {
+  protected boolean isSubscriptionTopic(String artifactIRI) {
+    return artifactRegistry.entrySet().stream()
+      .anyMatch(entry -> entry.getKey().topic().equals(artifactIRI));
+  }
 
-        @Override
-        public void handle(String target, Request baseRequest, HttpServletRequest request,
-                HttpServletResponse response) throws IOException, ServletException {
+  protected Set<ArtifactId> getSubscriberIds(Notification n) {
+    Set<ArtifactId> allArtifactIds = new HashSet<>();
+    for (Map.Entry<Subscription, Set<ArtifactId>> entry : artifactRegistry.entrySet()) {
+      Subscription subscription = entry.getKey();
+      Set<ArtifactId> artifactIds = entry.getValue();
 
-            String artifactIRI = null;
-            Enumeration<String> linkHeadersEnum = baseRequest.getHeaders("Link");
-
-            while (linkHeadersEnum.hasMoreElements()) {
-                String value = linkHeadersEnum.nextElement();
-
-                if (value.endsWith("rel=\"self\"")) {
-                    artifactIRI = value.substring(1, value.indexOf('>'));
-                }
-            }
-
-            if (artifactIRI == null) {
-                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                response.setContentType("text/plain");
-                response.getWriter()
-                        .println("Link headers are missing! See the W3C WebSub Recommendation for details.");
-            } else {
-                if (artifactRegistry.containsKey(artifactIRI)) {
-                    String payload = request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
-                    notifications.add(new Notification(artifactIRI, payload, baseRequest.getContentType()));
-
-                    response.setStatus(HttpServletResponse.SC_OK);
-                } else {
-                    response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                }
-            }
-
-            baseRequest.setHandled(true);
-        }
+      // Check if the subscription's topic (artifactIRI) matches the input artifactIRI
+      if (subscription.topic().equals(n.getTopic())) {
+        allArtifactIds.addAll(artifactIds); // Add all artifactIds from the matching subscription
+      }
     }
+    return allArtifactIds;
+  }
+
+  class NotificationHandler extends AbstractHandler {
+
+    @Override
+    public void handle(String target, Request baseRequest, HttpServletRequest request,
+                       HttpServletResponse response) throws IOException, ServletException {
+
+      String artifactIRI = null;
+      Enumeration<String> linkHeadersEnum = baseRequest.getHeaders("Link");
+
+      while (linkHeadersEnum.hasMoreElements()) {
+        String value = linkHeadersEnum.nextElement();
+
+        if (value.endsWith("rel=\"self\"")) {
+          artifactIRI = value.substring(1, value.indexOf('>'));
+        }
+      }
+
+      if (artifactIRI == null) {
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        response.setContentType("text/plain");
+        response.getWriter()
+          .println("Link headers are missing! See the W3C WebSub Recommendation for details.");
+      } else {
+        Subscription subscription = new Subscription(artifactIRI, baseRequest.getUri().toString());
+        if (isSubscriptionTopic(artifactIRI)) {
+          String payload = request.getReader().lines().collect(Collectors.joining(System.lineSeparator()));
+          notifications.add(new Notification(artifactIRI, payload, baseRequest.getContentType()));
+
+          response.setStatus(HttpServletResponse.SC_OK);
+        } else {
+          response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+        }
+      }
+      baseRequest.setHandled(true);
+    }
+  }
 
 }

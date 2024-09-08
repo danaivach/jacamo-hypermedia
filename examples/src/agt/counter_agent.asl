@@ -1,6 +1,6 @@
 /* Initial beliefs and rules */
 
-entry_url("http://localhost:8080/workspaces/61").
+entry_url("http://172.27.52.55:8080/workspaces/61").
 
 /* Initial goals */
 
@@ -10,10 +10,18 @@ entry_url("http://localhost:8080/workspaces/61").
 
 +!start : entry_url(Url) <-
   .print("hello world.");
+
+  // Create local workspace
+  createWorkspace("61");
+  !joinWorkspace("61",_);
+
+  // Load hypermedia environment
   makeArtifact("notification-server", "org.hyperagents.jacamo.artifacts.yggdrasil.NotificationServerArtifact", ["localhost", 8081], _);
   start;
-  !load_environment("61", Url);
+  !load_environment(Url, "61");
   .print("Environment loaded...");
+
+  // Create Counter hypermedia artifact
   .print("Creating counter...");
   invokeAction("makeArtifact",
     ["artifactClass", "artifactName"],
@@ -26,7 +34,8 @@ entry_url("http://localhost:8080/workspaces/61").
 
 +!countTo(X) : true <-
   .print(X, "...");
-  invokeAction("http://example.org/Increment", [])[artifact_name("c2")];
+  lookupArtifact("c2", CounterId);
+  invokeAction("http://example.org/Increment", [])[artifact_id(CounterId)];
   .wait(1000);
   !countTo(X - 1).
 

@@ -1,6 +1,8 @@
 /* Initial beliefs and rules */
 
+vocabulary("https://purl.org/hmas/").
 entry_url("http://172.27.52.55:8080/workspaces/61").
+web_id("https://wiser-solid-xi.interactions.ics.unisg.ch/agent/profile/card#me").
 
 /* Initial goals */
 
@@ -20,7 +22,6 @@ entry_url("http://172.27.52.55:8080/workspaces/61").
   start;
   !load_environment(Url, "61");
   .print("Environment loaded...").
-
 
 +count(X) : true <-
   .print("The count on the remote artifact has changed to: ", X).
