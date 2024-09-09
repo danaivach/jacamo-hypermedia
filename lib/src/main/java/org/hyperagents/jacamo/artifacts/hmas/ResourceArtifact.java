@@ -1,6 +1,9 @@
 package org.hyperagents.jacamo.artifacts.hmas;
 
-import cartago.*;
+import cartago.Artifact;
+import cartago.GUARD;
+import cartago.OPERATION;
+import cartago.ObsProperty;
 import ch.unisg.ics.interactions.hmas.bindings.Action;
 import ch.unisg.ics.interactions.hmas.bindings.ActionExecution;
 import ch.unisg.ics.interactions.hmas.bindings.protocols.ProtocolBinding;
@@ -9,11 +12,13 @@ import ch.unisg.ics.interactions.hmas.bindings.protocols.http.HttpAction;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.*;
 import ch.unisg.ics.interactions.hmas.interaction.vocabularies.INTERACTION;
+import ch.unisg.ics.interactions.hmas.interaction.vocabularies.SHACL;
 import jason.asSyntax.ASSyntax;
 import jason.asSyntax.Structure;
 import org.eclipse.rdf4j.common.net.ParsedIRI;
-import org.eclipse.rdf4j.model.Namespace;
+import org.eclipse.rdf4j.model.*;
 import org.eclipse.rdf4j.model.impl.SimpleNamespace;
+import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
 import org.eclipse.rdf4j.model.util.Values;
 
 import java.io.IOException;
@@ -72,30 +77,24 @@ public class ResourceArtifact extends Artifact {
       if (signifier.getIRIAsString().isPresent()) {
         String signifierIri = signifier.getIRIAsString().get();
         Set<String> actionTypes = signifier.getActionSpecification().getRequiredSemanticTypes();
-        Set<Ability> recommendedAbilities = signifier.getRecommendedAbilities();
 
         List<String> curieActionTypes = actionTypes.stream()
           .map(this::getPrefixedIRI)  // Apply getCurie to each element
           .collect(Collectors.toList());
 
-        List<String> curieAbilities = recommendedAbilities.stream()
-          .map(a -> {
-            Set<String> abilityTypes = new HashSet<>(a.getSemanticTypes());
-            abilityTypes.remove(INTERACTION.ABILITY.stringValue());
-            return this.getPrefixedIRI((String) abilityTypes.toArray()[0]);
-          })
-          .toList();
+        List<String> recommendedAbilities = getRecommendedAbilities(signifier);
+        List<String> recommendedContexts = getRecommendedContexts(signifier);
 
         if (!this.exposedSignifiers.containsKey(signifierIri)) {
           Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(signifierIri));
 
           ObsProperty signifierProperty = this.defineObsProperty("signifier", curieActionTypes.toArray(),
-            curieAbilities.toArray());
+            recommendedAbilities.toArray(), recommendedContexts.toArray());
           signifierProperty.addAnnot(iriAnnotation);
           this.exposedSignifiers.put(signifierIri, signifierProperty);
-
         } else {
-          this.exposedSignifiers.get(signifierIri).updateValues(curieActionTypes.toArray(), curieAbilities.toArray());
+          this.exposedSignifiers.get(signifierIri).updateValues(curieActionTypes.toArray(),
+            recommendedAbilities.toArray(), recommendedContexts.toArray());
         }
       }
     }
@@ -103,11 +102,12 @@ public class ResourceArtifact extends Artifact {
   }
 
   @GUARD
-  boolean exposureState(String state){
+  boolean exposureState(String state) {
     return this.exposureState.equals(state);
   }
 
-  @OPERATION void updateExposureState(){
+  @OPERATION
+  void updateExposureState() {
     this.exposureState = "done";
   }
 
@@ -195,6 +195,49 @@ public class ResourceArtifact extends Artifact {
     return iri;
   }
   */
+
+  protected List<String> getRecommendedAbilities(Signifier signifier) {
+    Set<Ability> recommendedAbilities = signifier.getRecommendedAbilities();
+    return recommendedAbilities.stream()
+      .map(a -> {
+        Set<String> abilityTypes = new HashSet<>(a.getSemanticTypes());
+        abilityTypes.remove(INTERACTION.ABILITY.stringValue());
+        return this.getPrefixedIRI((String) abilityTypes.toArray()[0]);
+      })
+      .toList();
+  }
+
+
+  protected List<String> getRecommendedContexts(Signifier signifier) {
+    Set<Context> contexts = signifier.getRecommendedContexts();
+    List<String> BDIContexts = new ArrayList<>();
+
+    SimpleValueFactory valueFactory = SimpleValueFactory.getInstance();
+    IRI hasBeliefResource = valueFactory.createIRI("http://example.org/hasBelief");
+
+// Iterate over each context
+    for (Context context : contexts) {
+      Model contextModel = context.getModel();
+
+      // Extract beliefs (subjects) for the current context
+      List<Resource> beliefsForCurrentContext = contextModel.filter(null, SHACL.PATH, hasBeliefResource)
+        .stream()
+        .map(Statement::getSubject)
+        .collect(Collectors.toList());
+
+      // For each belief (subject), collect the objects of statements where SHACL.HAS_VALUE is the predicate
+      for (Resource belief : beliefsForCurrentContext) {
+        List<String> beliefContents = contextModel.filter(belief, SHACL.HAS_VALUE, null)
+          .stream()
+          .map(statement -> statement.getObject().stringValue()) // Convert Value to String
+          .collect(Collectors.toList());
+
+        // Add the belief content (as Strings) to the overall list
+        BDIContexts.addAll(beliefContents);
+      }
+    }
+    return BDIContexts;
+  }
 
   private String getPrefixedIRI(String iri) {
     try {
