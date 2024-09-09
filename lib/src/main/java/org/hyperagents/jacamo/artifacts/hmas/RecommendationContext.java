@@ -1,7 +1,5 @@
 package org.hyperagents.jacamo.artifacts.hmas;
 
-import cartago.AgentId;
-
 import java.util.Objects;
 
 public class RecommendationContext {

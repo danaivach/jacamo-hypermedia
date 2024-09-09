@@ -1,6 +1,5 @@
 package org.hyperagents.jacamo.artifacts.hmas;
 
-import cartago.ArtifactId;
 import cartago.LINK;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import org.apache.hc.client5.http.fluent.Request;
@@ -31,8 +30,7 @@ public class WebSubResourceArtifact extends ResourceArtifact {
     if ("text/turtle".equals(notification.getContentType())) {
       this.profile = ResourceProfileGraphReader.readFromString(notification.getMessage());
       this.exposeSignifiers();
-    }
-    else if ("application/json".equals(notification.getContentType())) {
+    } else if ("application/json".equals(notification.getContentType())) {
       log("The state of this ResourceArtifact has changed: " + notification.getMessage());
       String obsProp = notification.getMessage();
       String functor = obsProp.substring(0, obsProp.indexOf("("));

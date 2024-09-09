@@ -1,6 +1,7 @@
 package org.hyperagents.jacamo.artifacts.hmas;
 
-import cartago.*;
+import cartago.Artifact;
+import cartago.OPERATION;
 import org.eclipse.rdf4j.common.net.ParsedIRI;
 import org.eclipse.rdf4j.model.Namespace;
 import org.eclipse.rdf4j.model.impl.SimpleNamespace;
@@ -17,7 +18,7 @@ public class NSRegistryArtifact extends Artifact {
 
   protected NSRegistry registry;
 
-  public void init(){
+  public void init() {
     this.registry = new NSRegistry();
   }
 
@@ -64,6 +65,31 @@ public class NSRegistryArtifact extends Artifact {
       this.namespaces = new HashMap<>();
     }
 
+    public static String getPrefixedIRI(String iri, NSRegistry registry) {
+      try {
+        ParsedIRI parsedAbsoluteIri = new ParsedIRI(iri);
+
+        for (Map.Entry<String, String> nsEntry : registry.getNamespaces().entrySet()) {
+          ParsedIRI parsedNamespace = new ParsedIRI(nsEntry.getValue());
+          ParsedIRI relativeIri = parsedNamespace.relativize(parsedAbsoluteIri);
+          if (!parsedAbsoluteIri.equals(relativeIri)) {
+            return nsEntry.getKey() + ":" + relativeIri;
+          }
+        }
+      } catch (URISyntaxException e) {
+        e.printStackTrace();
+      }
+      return iri;
+    }
+
+    public static String getResolvedIRI(String iri, NSRegistry registry) {
+      Set<Namespace> nsSet = registry.getNamespaces().entrySet().stream()
+        .map(entry -> new SimpleNamespace(entry.getKey(), entry.getValue()))
+        .collect(Collectors.toSet());
+
+      return Values.iri(nsSet, iri).stringValue();
+    }
+
     protected Map<String, String> getNamespaces() {
       return namespaces;
     }
@@ -88,31 +114,6 @@ public class NSRegistryArtifact extends Artifact {
 
     protected void removeNamespace(String prefix) {
       this.namespaces.remove(prefix);
-    }
-
-    public static String getPrefixedIRI(String iri, NSRegistry registry) {
-      try {
-        ParsedIRI parsedAbsoluteIri = new ParsedIRI(iri);
-
-        for (Map.Entry<String, String> nsEntry : registry.getNamespaces().entrySet()) {
-          ParsedIRI parsedNamespace = new ParsedIRI(nsEntry.getValue());
-          ParsedIRI relativeIri = parsedNamespace.relativize(parsedAbsoluteIri);
-          if (!parsedAbsoluteIri.equals(relativeIri)) {
-            return nsEntry.getKey() + ":" + relativeIri;
-          }
-        }
-      } catch (URISyntaxException e) {
-        e.printStackTrace();
-      }
-      return iri;
-    }
-
-    public static String getResolvedIRI(String iri, NSRegistry registry) {
-      Set<Namespace> nsSet = registry.getNamespaces().entrySet().stream()
-        .map(entry -> new SimpleNamespace(entry.getKey(), entry.getValue()))
-        .collect(Collectors.toSet());
-
-      return Values.iri(nsSet, iri).stringValue();
     }
   }
 }

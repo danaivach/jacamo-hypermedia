@@ -51,10 +51,8 @@ public class SignifierExposureArtifact extends Artifact {
     Set<RecommendationContext> agentSubscriptions = recommendationContextMap.getOrDefault(agentId, new HashSet<>());
 
     // Check if the agent has already subscribed for this artifactProfileUrl
-    if (agentSubscriptions.contains(newContext)) {
-      // Remove the old subscription with the same artifactProfileUrl
-      agentSubscriptions.remove(newContext);
-    }
+    // Remove the old subscription with the same artifactProfileUrl
+    agentSubscriptions.remove(newContext);
 
     // Add the new subscription (whether it replaces or adds a new one)
     agentSubscriptions.add(newContext);
@@ -104,7 +102,7 @@ public class SignifierExposureArtifact extends Artifact {
 
     protected SignifierExposureArtifact artifact;
     private ResourceProfile agentProfile;
-    private Set<String> agentAbilityTypes = new HashSet<>();
+    private final Set<String> agentAbilityTypes = new HashSet<>();
 
     public SignifierFilter(SignifierExposureArtifact artifact, ResourceProfile agentProfile) {
       this.artifact = artifact;
@@ -145,32 +143,32 @@ public class SignifierExposureArtifact extends Artifact {
       ArtifactObsProperty[] changed = ev.getChangedProperties();
       ArtifactObsProperty[] removed = ev.getRemovedProperties();
 
-        if (added != null) {
-          for (ArtifactObsProperty prop : added) {
-            String propName = prop.getName();
-            if ("signifier".equals(propName)){
-              return idComplementary(prop);
-            } else {
-              return true;
-            }
+      if (added != null) {
+        for (ArtifactObsProperty prop : added) {
+          String propName = prop.getName();
+          if ("signifier".equals(propName)) {
+            return idComplementary(prop);
+          } else {
+            return true;
           }
         }
+      }
 
-        if (changed != null) {
-          for (ArtifactObsProperty prop : changed) {
-            String propName = prop.getName();
-            if ("signifier".equals(propName)){
-              return idComplementary(prop);
-            } else {
-              return true;
-            }
+      if (changed != null) {
+        for (ArtifactObsProperty prop : changed) {
+          String propName = prop.getName();
+          if ("signifier".equals(propName)) {
+            return idComplementary(prop);
+          } else {
+            return true;
           }
         }
+      }
 
       if (removed != null) {
         for (ArtifactObsProperty prop : removed) {
           String propName = prop.getName();
-          if ("signifier".equals(propName)){
+          if ("signifier".equals(propName)) {
             return idComplementary(prop);
           } else {
             return true;

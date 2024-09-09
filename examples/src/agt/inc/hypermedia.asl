@@ -79,7 +79,7 @@
   !registerForWebSub(WkspName, WkspArtIdTerm).
 
 @hypermedia_workspace_joining_hmas
-+!joinHypermediaWorkspace(WkspName, WkspArtId) : vocabulary("https://purl.org/hmas/") & signifier(["jacamo:JoinWorkspace"],_) <-
++!joinHypermediaWorkspace(WkspName, WkspArtId) : vocabulary("https://purl.org/hmas/") & signifier(["jacamo:JoinWorkspace"],_,_) <-
   invokeAction("jacamo:JoinWorkspace")[artifact_id(WkspArtId)].
 
 @hypermedia_workspace_joining_td
