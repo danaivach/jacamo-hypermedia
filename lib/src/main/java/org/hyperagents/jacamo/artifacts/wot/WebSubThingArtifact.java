@@ -7,6 +7,9 @@ import java.io.IOException;
 
 import cartago.LINK;
 
+import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
+import ch.unisg.ics.interactions.wot.td.ThingDescription;
+import ch.unisg.ics.interactions.wot.td.io.TDGraphReader;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
@@ -39,18 +42,25 @@ public class WebSubThingArtifact extends ThingArtifact {
 
     @LINK
     public void onNotification(Notification notification) {
+      if ("text/turtle".equals(notification.getContentType())) {
+        this.td = TDGraphReader.readFromString(ThingDescription.TDFormat.RDF_TURTLE, notification.getMessage());
+        if (this.affordanceExposure) {
+          this.exposeAffordances();
+        }
+      } else if ("application/json".equals(notification.getContentType())) {
         log("The state of this ThingArtifact has changed: " + notification.getMessage());
 
         String obsProp = notification.getMessage();
         String functor = obsProp.substring(0, obsProp.indexOf("("));
         String[] params = obsProp.substring(obsProp.indexOf("(") + 1, obsProp.length() - 1)
-                .split(",");
+          .split(",");
 
         if (this.hasObsPropertyByTemplate(functor, (Object[]) params)) {
-            this.updateObsProperty(functor, (Object[]) params);
+          this.updateObsProperty(functor, (Object[]) params);
         } else {
-            this.defineObsProperty(functor, (Object[]) params);
+          this.defineObsProperty(functor, (Object[]) params);
         }
+      }
     }
 
     /*

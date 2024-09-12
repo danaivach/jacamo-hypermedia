@@ -2,6 +2,7 @@ package org.hyperagents.jacamo.artifacts.yggdrasil;
 
 import cartago.LINK;
 import cartago.OPERATION;
+import cartago.ObsProperty;
 import ch.unisg.ics.interactions.hmas.core.vocabularies.CORE;
 import ch.unisg.ics.interactions.wot.td.ThingDescription;
 import ch.unisg.ics.interactions.wot.td.ThingDescription.TDFormat;
@@ -15,8 +16,7 @@ import org.eclipse.rdf4j.model.vocabulary.RDF;
 import org.hyperagents.jacamo.artifacts.wot.WebSubThingArtifact;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -35,6 +35,9 @@ public class WorkspaceThingArtifact extends WebSubThingArtifact {
   private IRI workspaceIRI;
   private Model graph;
   private ValueFactory rdf;
+  private Map<String, ObsProperty> parentWorkspaces = new HashMap();
+  private Map<String, ObsProperty> workspaces = new HashMap();
+  private Map<String, ObsProperty> artifacts = new HashMap();
 
   @Override
   public void init(String url, boolean dryRun) {
@@ -52,7 +55,7 @@ public class WorkspaceThingArtifact extends WebSubThingArtifact {
   @OPERATION
   public void joinHypermediaWorkspace() {
     if (td.getThingURI().isPresent() && td.getGraph().isPresent()) {
-      this.invokeAction("joinWorkspace");
+      this.invokeAction("https://purl.org/hmas/jacamo/JoinWorkspace");
     }
   }
 
@@ -117,11 +120,23 @@ public class WorkspaceThingArtifact extends WebSubThingArtifact {
   }
 
   private void exposeProperties(List<String> list, String obsPropertyName) {
+    Map<String, Map<String, ObsProperty>> propertyMap = Map.of(
+      "parentWorkspace", parentWorkspaces,
+      "workspace", workspaces,
+      "artifact", artifacts
+    );
+
+    Map<String, ObsProperty> targetMap = propertyMap.get(obsPropertyName);
+    if (targetMap == null) {
+      throw new IllegalArgumentException("Invalid obsPropertyName: " + obsPropertyName);
+    }
+
     for (String memberIRI : list) {
-      MemberMetadata data = new MemberMetadata(memberIRI);
-      if (getObsPropertyByTemplate(obsPropertyName, memberIRI, data.memberName) == null) {
-        this.defineObsProperty(obsPropertyName, memberIRI, data.memberName,
+      if (!parentWorkspaces.containsKey(memberIRI) && !workspaces.containsKey(memberIRI) && !artifacts.containsKey(memberIRI)) {
+        MemberMetadata data = new MemberMetadata(memberIRI);
+        ObsProperty property = this.defineObsProperty(obsPropertyName, memberIRI, data.memberName,
           data.memberTypes.toArray(new String[0]));
+        targetMap.put(memberIRI, property);
       }
     }
   }

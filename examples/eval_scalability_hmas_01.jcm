@@ -1,0 +1,21 @@
+/*
+    JaCaMo Application File Template
+    --------------------------------
+
+    This file defines the initial state of the MAS (initial agents, environment, organisation, ....)
+
+    (see jacamo/doc/jcm.html for more information about what can be defined in this file)
+
+    JaCaMo 1.2
+*/
+
+mas main {
+
+    agent agent0 : hmas_agent.asl {
+        // EvalType, DynamicPlanLib, MinSigNum, MaxSigNum
+        beliefs: evaluation(scalability, false, true, false, false, 0, 2000)
+                 vocabulary("https://purl.org/hmas/")
+    }
+
+
+}

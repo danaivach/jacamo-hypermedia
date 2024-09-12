@@ -7,14 +7,10 @@ import ch.unisg.ics.interactions.hmas.interaction.signifiers.Ability;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.CapableAgent;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.ResourceProfile;
 import ch.unisg.ics.interactions.hmas.interaction.vocabularies.INTERACTION;
-import org.eclipse.rdf4j.common.net.ParsedIRI;
-import org.eclipse.rdf4j.model.Namespace;
-import org.eclipse.rdf4j.model.impl.SimpleNamespace;
-import org.eclipse.rdf4j.model.util.Values;
+import org.hyperagents.jacamo.artifacts.namespaces.NSRegistry;
 import org.hyperagents.jacamo.artifacts.yggdrasil.Notification;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -73,36 +69,11 @@ public class SignifierExposureArtifact extends Artifact {
     return new SignifierFilter(this, agentProfile);
   }
 
-  private String getPrefixedIRI(String iri) {
-    try {
-      ParsedIRI parsedAbsoluteIri = new ParsedIRI(iri);
-
-      for (Map.Entry<String, String> nsEntry : this.namespaces.entrySet()) {
-        ParsedIRI parsedNamespace = new ParsedIRI(nsEntry.getValue());
-        ParsedIRI relativeIri = parsedNamespace.relativize(parsedAbsoluteIri);
-        if (!parsedAbsoluteIri.equals(relativeIri)) {
-          return nsEntry.getKey() + ":" + relativeIri;
-        }
-      }
-    } catch (URISyntaxException e) {
-      e.printStackTrace();
-    }
-    return iri;
-  }
-
-  private String getResolvedIRI(String iri) {
-    Set<Namespace> nsSet = this.namespaces.entrySet().stream()
-      .map(entry -> new SimpleNamespace(entry.getKey(), entry.getValue()))
-      .collect(Collectors.toSet());
-
-    return Values.iri(nsSet, iri).stringValue();
-  }
-
   public class SignifierFilter implements IEventFilter, java.io.Serializable {
 
+    private final Set<String> agentAbilityTypes = new HashSet<>();
     protected SignifierExposureArtifact artifact;
     private ResourceProfile agentProfile;
-    private final Set<String> agentAbilityTypes = new HashSet<>();
 
     public SignifierFilter(SignifierExposureArtifact artifact, ResourceProfile agentProfile) {
       this.artifact = artifact;
@@ -122,7 +93,7 @@ public class SignifierExposureArtifact extends Artifact {
         Set<String> types = ability.getSemanticTypes()
           .stream()
           .filter(type -> !type.equals(INTERACTION.ABILITY.toString()))
-          .map(type -> artifact.getPrefixedIRI(type))
+          .map(type -> NSRegistry.getPrefixedIRI(type, artifact.namespaces))
           .collect(Collectors.toSet());
         this.agentAbilityTypes.addAll(types);
       }

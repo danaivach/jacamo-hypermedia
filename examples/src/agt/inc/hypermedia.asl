@@ -5,7 +5,15 @@
 @environment_loading
  +!load_environment(EnvUrl, EnvName) : true <-
    .print("Loading environment (entry point): ", EnvUrl);
+
+   // Check available vocabulary or set TD by default
+   ?vocabulary(Vocabulary);
+   .print("Vocabulary: ", Vocabulary);
+
+   // Register the JaCaMo namespace in the NS Registry
    !setNamespace("jacamo", "https://purl.org/hmas/jacamo/");
+
+   // Handle the entry workspace
    +workspace(EnvUrl, EnvName).
 
 /* Mirror hypermedia workspaces as local CArtAgO workspaces */
@@ -19,7 +27,11 @@
 
   // Create a hypermedia WorkspaceArtifact for this workspace.
   // Used for some operations (e.g., to create an artifact).
-  !makeMirroringWorkspace(WkspIRI, WkspName, WkspId);
+  !makeMirroringWorkspace(WkspIRI, WkspName, WkspId, WkspArtId);
+
+  // Set WebId
+  ?web_id(WebId);
+  setOperatorWebId(WebId)[artifact_id(WkspArtId)];
 
   // Join the hypermedia WorkspaceArtifact
   !joinHypermediaWorkspace(WkspName);
@@ -28,16 +40,17 @@
 
 /* Mirror hypermedia artifacts in local CArtAgO workspaces */
 
-@artifact_discovery
+@artifact_discovery[atomic]
 +artifact(ArtIRI, ArtName, ArtTypes)[workspace(WkspName,_)] : true <-
-  .print("Discovered artifact (name: ", ArtName ,") with types ", ArtTypes, " in workspace ", WkspName, ": ", ArtIRI);
+  //.print("Discovered artifact (name: ", ArtName ,") with types ", ArtTypes, " in workspace ", WkspName, ": ", ArtIRI);
   ?joinedWsp(WkspId, WkspNameTerm, WkspName);
 
   // Create a hypermedia ResourceArtifact for this artifact.
   !makeMirroringArtifact(ArtIRI, ArtName, ArtId, WkspId);
 
-  // Focus on the ResourceArtifact
-  focus(ArtId);
+  // Set WebId
+  ?web_id(WebId);
+  setOperatorWebId(WebId)[artifact_id(ArtId)];
 
   // Register to the ResourceArtifact for notifications
   !registerForWebSub(ArtName, ArtId);
@@ -46,7 +59,7 @@
   ?workspace(WkspIRI, WkspNameStr);
 
   // Focus on the ResourceArtifact to observe its properties and events
-  registerArtifactForFocus(WkspIRI, ArtIRI, ArtId, ArtName);
+  //registerArtifactForFocus(WkspIRI, ArtIRI, ArtId, ArtName);
 
   .print("Created artifact ", ArtName, ", and registered for notifications").
 
@@ -55,15 +68,16 @@
 /* Workspaces */
 
 @workspace_instantiation_hmas
-+!makeMirroringWorkspace(WkspIRI, WkspName, WkspId) : vocabulary("https://purl.org/hmas/") & web_id(WebId) <-
++!makeMirroringWorkspace(WkspIRI, WkspName, WkspId, WkspArtId) : vocabulary("https://purl.org/hmas/") <-
   makeArtifact(WkspName, "org.hyperagents.jacamo.artifacts.yggdrasil.WorkspaceResourceArtifact", [WkspIRI], WkspArtId)[wid(WkspId)];
-  .print("Registering namespaces for ", WkspName);
   !registerNamespaces(WkspArtId);
-  setOperatorWebId(WebId)[artifact_id(WkspArtId)].
+  focus(WkspArtId).
 
 @workspace_instantiation_wot
-+!makeMirroringWorkspace(WkspIRI, WkspName, WkspId) : true <-
-  makeArtifact(WkspName, "org.hyperagents.jacamo.artifacts.yggdrasil.WorkspaceThingArtifact", [WkspIRI], WkspArtId)[wid(WkspId)].
++!makeMirroringWorkspace(WkspIRI, WkspName, WkspId, WkspArtId) : vocabulary("https://www.w3.org/2019/wot/td#") <-
+  makeArtifact(WkspName, "org.hyperagents.jacamo.artifacts.yggdrasil.WorkspaceThingArtifact", [WkspIRI], WkspArtId)[wid(WkspId)];
+  !registerNamespaces(WkspArtId);
+  focus(WkspArtId).
 
 @workspace_joining
 +!joinWorkspace(WkspName, WkspId) : true <-
@@ -74,29 +88,30 @@
 @hypermedia_workspace_joining
 +!joinHypermediaWorkspace(WkspName) : true <-
   lookupArtifact(WkspName, WkspArtId);
-  focus(WkspArtId);
-  !joinHypermediaWorkspace(WkspName, WkspArtId);
+  //!joinHypermediaWorkspace(WkspName, WkspArtId);
   !registerForWebSub(WkspName, WkspArtIdTerm).
 
 @hypermedia_workspace_joining_hmas
 +!joinHypermediaWorkspace(WkspName, WkspArtId) : vocabulary("https://purl.org/hmas/") & signifier(["jacamo:JoinWorkspace"],_,_) <-
-  invokeAction("jacamo:JoinWorkspace")[artifact_id(WkspArtId)].
+  invokeAction("jacamo:JoinWorkspace")[artifact_id(WkspArtId)];.
 
 @hypermedia_workspace_joining_td
-+!joinHypermediaWorkspace(WkspName, WkspArtId) : true <-
++!joinHypermediaWorkspace(WkspName, WkspArtId) : vocabulary("https://www.w3.org/2019/wot/td#") <-
   joinHypermediaWorkspace[artifact_id(WkspArtId)].
 
 /* Artifacts */
 
 @hypermedia_artifact_instantiation_hmas
-+!makeMirroringArtifact(ArtIRI, ArtName, ArtId, WkspId) : vocabulary("https://purl.org/hmas/") & web_id(WebId) <-
++!makeMirroringArtifact(ArtIRI, ArtName, ArtId, WkspId) : vocabulary("https://purl.org/hmas/") <-
   makeArtifact(ArtName, "org.hyperagents.jacamo.artifacts.hmas.WebSubResourceArtifact", [ArtIRI], ArtId)[wid(WkspId)];
   !registerNamespaces(ArtId);
-  setOperatorWebId(WebId)[artifact_id(ArtId)].
+  focus(ArtId).
 
 @hypermedia_artifact_instantiation_wot
-+!makeMirroringArtifact(ArtIRI, ArtName, ArtId, WkspId) : true <-
-  makeArtifact(ArtName, "org.hyperagents.jacamo.artifacts.wot.WebSubThingArtifact", [ArtIRI], ArtId)[wid(WkspId)].
++!makeMirroringArtifact(ArtIRI, ArtName, ArtId, WkspId) : vocabulary("https://www.w3.org/2019/wot/td#") <-
+  makeArtifact(ArtName, "org.hyperagents.jacamo.artifacts.wot.WebSubThingArtifact", [ArtIRI], ArtId)[wid(WkspId)];
+  !registerNamespaces(ArtId);
+  focus(ArtId).
 
 /* WebSub */
 
@@ -113,12 +128,12 @@
 
 @namespace_registry_instantiation
 +?nsRegistry(RegistryId) : true <-
-  makeArtifact("nsRegistry", "org.hyperagents.jacamo.artifacts.hmas.NSRegistryArtifact", [], RegistryId);
+  makeArtifact("nsRegistry", "org.hyperagents.jacamo.artifacts.namespaces.NSRegistryArtifact", [], RegistryId);
   +nsRegistry(RegistryId);
   focus(RegistryId);
   .print("Created namespace registry").
 
-@artifactNamespaceRegistration
+@artifact_namespace_registration
 +!registerNamespaces(ArtId) : true <-
   ?nsRegistry(RegistryId);
   .findall(Prefix, namespace(Prefix, Namespace), Prefixes);
@@ -132,10 +147,17 @@
   setNamespace(Prefix, Namespace)[artifact_id(ArtId)];
   !registerNamespaces(Prefixes, ArtId).
 
-@namespaceRegistration
+@namespace_registration
 +!setNamespace(Prefix, Namespace): true <-
   ?nsRegistry(RegistryId);
+  +nsRegistry(RegistryId);
   setNamespace(Prefix, Namespace)[artifact_id(RegistryId)].
 
+@default_vocabulary_setup
++?vocabulary(Vocabulary) : true <-
+  +vocabulary("https://www.w3.org/2019/wot/td#").
 
-
+@default_webId_setup
++?web_id(WebId) : .my_name(AgentName) <-
+  .concat("https://example.org/", AgentName, "/profile/card#me", WebId);
+  +web_id(WebId).

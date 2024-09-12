@@ -1,16 +1,12 @@
 package org.hyperagents.jacamo.artifacts.wot;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import cartago.Artifact;
 import cartago.OPERATION;
+import cartago.ObsProperty;
 import cartago.OpFeedbackParam;
 import ch.unisg.ics.interactions.wot.td.ThingDescription;
 import ch.unisg.ics.interactions.wot.td.ThingDescription.TDFormat;
@@ -27,6 +23,8 @@ import ch.unisg.ics.interactions.wot.td.security.APIKeySecurityScheme;
 import ch.unisg.ics.interactions.wot.td.security.SecurityScheme;
 import ch.unisg.ics.interactions.wot.td.vocabularies.TD;
 import ch.unisg.ics.interactions.wot.td.vocabularies.WoTSec;
+import jason.asSyntax.*;
+import org.hyperagents.jacamo.artifacts.namespaces.NSRegistry;
 
 /**
  * A CArtAgO artifact that can interpret a W3C WoT Thing Description (TD) and exposes the affordances
@@ -43,6 +41,9 @@ public class ThingArtifact extends Artifact {
   protected ThingDescription td;
   protected Optional<String> agentWebId;
   protected boolean dryRun;
+  protected Map<String, ObsProperty> exposedAffordances;
+  protected boolean affordanceExposure;
+  protected Map<String, String> namespaces;
   private Optional<String> apiKey;
 
   /**
@@ -58,13 +59,15 @@ public class ThingArtifact extends Artifact {
       for (SecurityScheme scheme : td.getSecuritySchemes()) {
         defineObsProperty("securityScheme", scheme.getConfiguration());
       }
-
     } catch (IOException e) {
       failed(e.getMessage());
     }
 
     this.agentWebId = Optional.empty();
     this.apiKey = Optional.empty();
+    this.exposedAffordances = new HashMap<>();
+    this.affordanceExposure = false;
+    this.namespaces = new HashMap<>();
     this.dryRun = false;
   }
 
@@ -81,6 +84,23 @@ public class ThingArtifact extends Artifact {
   }
 
   /**
+   * Method called by CArtAgO to initialize the artifact. The W3C WoT Thing Description (TD) used by
+   * this artifact is retrieved and parsed during initialization.
+   *
+   * @param url A URL that dereferences to a W3C WoT Thing Description.
+   * @param dryRun When set to true, the requests are logged, but not executed.
+   * @param affordanceExposure When set to true, TD Interaction Affordances are exposed as observable properties.
+   */
+  public void init(String url, boolean dryRun, boolean affordanceExposure) {
+    init(url, dryRun);
+    this.affordanceExposure = affordanceExposure;
+    if (this.affordanceExposure) {
+      defineObsProperty("exposureState", "inProgress");
+      this.exposeAffordances();
+    }
+  }
+
+  /**
    * CArtAgO operation for setting the WebID of an operating agent using the artifact.
    *
    * @param webId The operating agent's WebID as a string.
@@ -88,6 +108,25 @@ public class ThingArtifact extends Artifact {
   @OPERATION
   public void setOperatorWebId(String webId) {
     this.agentWebId = Optional.of(webId);
+  }
+
+  /**
+   * <p>CArtAgO operation for setting a namespace, which will be used for operations,
+   * observable properties, and observable events of the artifact.</p>
+   *
+   * <p>For example, by setting a namespace with <code>prefix="saref"</code> and
+   * <code>namespace="https://saref.etsi.org/core/"</code>, an agent can invoke actions using
+   * either the full IRI, e.g., <code>invokeAction("https://saref.etsi.org/core/ToggleCommand")</code>,
+   * or the CURIE (Compact URI), e.g., <code>invokeAction("saref:ToggleCommand")</code>, and both will
+   * produce the same result.</p>
+   *
+   * @param prefix The prefix of the namespace, e.g., "saref".
+   * @param namespace The name of the namespace, e.g., "https://saref.etsi.org/core/".
+   */
+  @OPERATION
+  public void setNamespace(String prefix, String namespace) {
+    this.namespaces.put(prefix, namespace);
+    this.exposeAffordances();
   }
 
   /**
@@ -136,6 +175,12 @@ public class ThingArtifact extends Artifact {
    */
   @OPERATION
   public void writeProperty(String propertyTag, Object[] payloadTags, Object[] payload) {
+    propertyTag = NSRegistry.getResolvedIRI(propertyTag, this.namespaces);
+    payloadTags = Arrays
+      .stream(payloadTags)
+      .sequential()
+      .map(tag -> NSRegistry.getResolvedIRI((String) tag, this.namespaces))
+      .toArray();
     validateParameters(propertyTag, payloadTags, payload);
     if (payload.length == 0) {
       failed("The payload used when writing a property cannot be empty.");
@@ -202,6 +247,12 @@ public class ThingArtifact extends Artifact {
   public void invokeAction(String actionTag, Object[] payloadTags, Object[] payload,
       OpFeedbackParam<Object[]> output) {
     //validateParameters(actionTag, payloadTags, payload);
+    actionTag = NSRegistry.getResolvedIRI(actionTag, this.namespaces);
+    payloadTags = Arrays
+      .stream(payloadTags)
+      .sequential()
+      .map(tag -> NSRegistry.getResolvedIRI((String) tag, this.namespaces))
+      .toArray();
 
     Optional<ActionAffordance> action = td.getFirstActionBySemanticType(actionTag);
 
@@ -312,6 +363,7 @@ public class ThingArtifact extends Artifact {
 
   private void readProperty(String semanticType, Optional<OpFeedbackParam<Object[]>> tags,
       OpFeedbackParam<Object[]> output) {
+    semanticType = NSRegistry.getResolvedIRI(semanticType, this.namespaces);
     PropertyAffordance property = getPropertyOrFail(semanticType);
     Optional<TDHttpResponse> response = executePropertyRequest(property, TD.readProperty,
         new Object[0], new Object[0]);
@@ -331,6 +383,7 @@ public class ThingArtifact extends Artifact {
 
   /* Tries to retrieve a property first by semantic tag, then by name. Fails if none works. */
   private PropertyAffordance getPropertyOrFail(String propertyTag) {
+    propertyTag = NSRegistry.getResolvedIRI(propertyTag, this.namespaces);
     Optional<PropertyAffordance> property = td.getFirstPropertyBySemanticType(propertyTag);
 
     if (!property.isPresent()) {
@@ -431,6 +484,10 @@ public class ThingArtifact extends Artifact {
             }
           }
 
+          tagList = tagList
+            .stream()
+            .map(tag -> NSRegistry.getPrefixedIRI(tag, this.namespaces))
+            .toList();
           tags.get().set(tagList.toArray());
           output.set(data.toArray());
         }
@@ -556,5 +613,40 @@ public class ThingArtifact extends Artifact {
     }
 
     return Optional.empty();
+  }
+
+  /**
+   *  Exposes TD Interaction Affordances to the belief base of the caller agent,
+   *  if <code>affordanceExposure</code> is set to true.
+   */
+  protected void exposeAffordances() {
+    if (this.affordanceExposure) {
+      getObsProperty("exposureState").updateValue("inProgress");
+
+      for (ActionAffordance action : this.td.getActions()) {
+
+          List<String> actionTypes = action.getSemanticTypes();
+          List<String> curieActionTypes = actionTypes.stream()
+            .map(type -> NSRegistry.getPrefixedIRI(type, this.namespaces))  // Apply getCurie to each element
+            .toList();
+
+          List<StringTermImpl> types = curieActionTypes.stream()
+            .filter(type -> !TD.ActionAffordance.equals(type))
+            .map(StringTermImpl::new).toList();
+
+          ListTerm typesList = new ListTermImpl();
+          typesList.addAll(types);
+        if (!exposedAffordances.containsKey(action.getName())) {
+          ObsProperty affordanceProperty = getObsPropertyByTemplate("affordance", typesList);
+          if (affordanceProperty == null) {
+            ObsProperty property = this.defineObsProperty("affordance", typesList);
+            this.exposedAffordances.put(action.getName(), property);
+          }
+        } else {
+            exposedAffordances.get(action.getName()).updateValue(typesList);
+        }
+      }
+      getObsProperty("exposureState").updateValue("done");
+    }
   }
 }

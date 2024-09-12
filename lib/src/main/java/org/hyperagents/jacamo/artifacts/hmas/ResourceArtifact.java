@@ -15,16 +15,15 @@ import ch.unisg.ics.interactions.hmas.interaction.vocabularies.INTERACTION;
 import ch.unisg.ics.interactions.hmas.interaction.vocabularies.SHACL;
 import jason.asSyntax.ASSyntax;
 import jason.asSyntax.Structure;
-import org.eclipse.rdf4j.common.net.ParsedIRI;
-import org.eclipse.rdf4j.model.*;
-import org.eclipse.rdf4j.model.impl.SimpleNamespace;
+import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.Resource;
+import org.eclipse.rdf4j.model.Statement;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
-import org.eclipse.rdf4j.model.util.Values;
+import org.hyperagents.jacamo.artifacts.namespaces.NSRegistry;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * A CArtAgO artifact that can interpret an hMAS Resource Profile and exposes signifiers that reveal
@@ -79,8 +78,8 @@ public class ResourceArtifact extends Artifact {
         Set<String> actionTypes = signifier.getActionSpecification().getRequiredSemanticTypes();
 
         List<String> curieActionTypes = actionTypes.stream()
-          .map(this::getPrefixedIRI)  // Apply getCurie to each element
-          .collect(Collectors.toList());
+          .map(type -> NSRegistry.getPrefixedIRI(type, this.namespaces))  // Apply getCurie to each element
+          .toList();
 
         List<String> recommendedAbilities = getRecommendedAbilities(signifier);
         List<String> recommendedContexts = getRecommendedContexts(signifier);
@@ -101,16 +100,6 @@ public class ResourceArtifact extends Artifact {
     getObsProperty("exposureState").updateValue("done");
   }
 
-  @GUARD
-  boolean exposureState(String state) {
-    return this.exposureState.equals(state);
-  }
-
-  @OPERATION
-  void updateExposureState() {
-    this.exposureState = "done";
-  }
-
   /**
    * CArtAgO operation for setting the WebID of an operating agent using the artifact.
    *
@@ -121,6 +110,19 @@ public class ResourceArtifact extends Artifact {
     this.agentWebId = Optional.of(webId);
   }
 
+  /**
+   * <p>CArtAgO operation for setting a namespace, which will be used for operations,
+   * observable properties, and observable events of the artifact.</p>
+   *
+   * <p>For example, by setting a namespace with <code>prefix="saref"</code> and
+   * <code>namespace="https://saref.etsi.org/core/"</code>, an agent can invoke actions using
+   * either the full IRI, e.g., <code>invokeAction("https://saref.etsi.org/core/ToggleCommand")</code>,
+   * or the CURIE (Compact URI), e.g., <code>invokeAction("saref:ToggleCommand")</code>, and both will
+   * produce the same result.</p>
+   *
+   * @param prefix The prefix of the namespace, e.g., "saref".
+   * @param namespace The name of the namespace, e.g., "https://saref.etsi.org/core/".
+   */
   @OPERATION
   public void setNamespace(String prefix, String namespace) {
     this.namespaces.put(prefix, namespace);
@@ -136,7 +138,7 @@ public class ResourceArtifact extends Artifact {
   @OPERATION
   public void invokeAction(String actionTag) {
 
-    actionTag = getResolvedIRI(actionTag);
+    actionTag = NSRegistry.getResolvedIRI(actionTag, this.namespaces);
     Optional<Signifier> signifierOp = this.profile.getFirstExposedSignifier(actionTag);
 
     if (signifierOp.isPresent()) {
@@ -202,7 +204,7 @@ public class ResourceArtifact extends Artifact {
       .map(a -> {
         Set<String> abilityTypes = new HashSet<>(a.getSemanticTypes());
         abilityTypes.remove(INTERACTION.ABILITY.stringValue());
-        return this.getPrefixedIRI((String) abilityTypes.toArray()[0]);
+        return NSRegistry.getPrefixedIRI((String) abilityTypes.toArray()[0], this.namespaces);
       })
       .toList();
   }
@@ -223,14 +225,14 @@ public class ResourceArtifact extends Artifact {
       List<Resource> beliefsForCurrentContext = contextModel.filter(null, SHACL.PATH, hasBeliefResource)
         .stream()
         .map(Statement::getSubject)
-        .collect(Collectors.toList());
+        .toList();
 
       // For each belief (subject), collect the objects of statements where SHACL.HAS_VALUE is the predicate
       for (Resource belief : beliefsForCurrentContext) {
         List<String> beliefContents = contextModel.filter(belief, SHACL.HAS_VALUE, null)
           .stream()
           .map(statement -> statement.getObject().stringValue()) // Convert Value to String
-          .collect(Collectors.toList());
+          .toList();
 
         // Add the belief content (as Strings) to the overall list
         BDIContexts.addAll(beliefContents);
@@ -238,30 +240,4 @@ public class ResourceArtifact extends Artifact {
     }
     return BDIContexts;
   }
-
-  private String getPrefixedIRI(String iri) {
-    try {
-      ParsedIRI parsedAbsoluteIri = new ParsedIRI(iri);
-
-      for (Map.Entry<String, String> nsEntry : this.namespaces.entrySet()) {
-        ParsedIRI parsedNamespace = new ParsedIRI(nsEntry.getValue());
-        ParsedIRI relativeIri = parsedNamespace.relativize(parsedAbsoluteIri);
-        if (!parsedAbsoluteIri.equals(relativeIri)) {
-          return nsEntry.getKey() + ":" + relativeIri;
-        }
-      }
-    } catch (URISyntaxException e) {
-      e.printStackTrace();
-    }
-    return iri;
-  }
-
-  private String getResolvedIRI(String iri) {
-    Set<Namespace> nsSet = this.namespaces.entrySet().stream()
-      .map(entry -> new SimpleNamespace(entry.getKey(), entry.getValue()))
-      .collect(Collectors.toSet());
-
-    return Values.iri(nsSet, iri).stringValue();
-  }
-
 }
