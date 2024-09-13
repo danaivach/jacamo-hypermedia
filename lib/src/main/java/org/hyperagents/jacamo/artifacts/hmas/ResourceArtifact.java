@@ -13,8 +13,8 @@ import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.*;
 import ch.unisg.ics.interactions.hmas.interaction.vocabularies.INTERACTION;
 import ch.unisg.ics.interactions.hmas.interaction.vocabularies.SHACL;
-import jason.asSyntax.ASSyntax;
-import jason.asSyntax.Structure;
+import ch.unisg.ics.interactions.wot.td.vocabularies.TD;
+import jason.asSyntax.*;
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Resource;
@@ -41,6 +41,7 @@ public class ResourceArtifact extends Artifact {
   protected Optional<String> agentWebId;
   protected Optional<String> apiKey;
   protected Map<String, ObsProperty> exposedSignifiers;
+  protected boolean interactionGuidance = false;
   protected boolean dryRun;
   protected Map<String, String> namespaces;
   private String exposureState;
@@ -61,8 +62,13 @@ public class ResourceArtifact extends Artifact {
     this.exposeSignifiers();
   }
 
-  public void init(String url, boolean dryRun) {
+  public void init(String url, boolean interactionGuidance) {
+   this.interactionGuidance = interactionGuidance;
     init(url);
+  }
+
+  public void init(String url, boolean interactionGuidance, boolean dryRun) {
+    init(url, interactionGuidance);
     this.dryRun = dryRun;
   }
 
@@ -72,32 +78,61 @@ public class ResourceArtifact extends Artifact {
    */
   void exposeSignifiers() {
     getObsProperty("exposureState").updateValue("inProgress");
-    for (Signifier signifier : this.profile.getExposedSignifiers()) {
-      if (signifier.getIRIAsString().isPresent()) {
-        String signifierIri = signifier.getIRIAsString().get();
-        Set<String> actionTypes = signifier.getActionSpecification().getRequiredSemanticTypes();
 
+    for (Signifier signifier : this.profile.getExposedSignifiers()) {
+      signifier.getIRIAsString().ifPresent(signifierIri -> {
+        Set<String> actionTypes = signifier.getActionSpecification().getRequiredSemanticTypes();
         List<String> curieActionTypes = actionTypes.stream()
-          .map(type -> NSRegistry.getPrefixedIRI(type, this.namespaces))  // Apply getCurie to each element
+          .map(type -> NSRegistry.getPrefixedIRI(type, this.namespaces))
           .toList();
 
-        List<String> recommendedAbilities = getRecommendedAbilities(signifier);
-        List<String> recommendedContexts = getRecommendedContexts(signifier);
+        // Get recommended abilities and contexts if interactionGuidance is true
+        List<String> recommendedAbilities = interactionGuidance ? getRecommendedAbilities(signifier) : null;
+        List<String> recommendedContexts = interactionGuidance ? getRecommendedContexts(signifier) : null;
 
-        if (!this.exposedSignifiers.containsKey(signifierIri)) {
-          Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(signifierIri));
+        ObsProperty signifierProperty = createOrUpdateObsProperty(signifierIri, curieActionTypes, recommendedAbilities, recommendedContexts);
 
-          ObsProperty signifierProperty = this.defineObsProperty("signifier", curieActionTypes.toArray(),
-            recommendedAbilities.toArray(), recommendedContexts.toArray());
-          signifierProperty.addAnnot(iriAnnotation);
-          this.exposedSignifiers.put(signifierIri, signifierProperty);
-        } else {
-          this.exposedSignifiers.get(signifierIri).updateValues(curieActionTypes.toArray(),
-            recommendedAbilities.toArray(), recommendedContexts.toArray());
-        }
-      }
+        // Add annotation to the property
+        Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(signifierIri));
+        signifierProperty.addAnnot(iriAnnotation);
+      });
     }
+
     getObsProperty("exposureState").updateValue("done");
+  }
+
+  // Helper method to create or update ObsProperty
+  private ObsProperty createOrUpdateObsProperty(String signifierIri, List<String> curieActionTypes, List<String> recommendedAbilities, List<String> recommendedContexts) {
+    ObsProperty signifierProperty;
+
+    if (this.exposedSignifiers.containsKey(signifierIri)) {
+      signifierProperty = this.exposedSignifiers.get(signifierIri);
+      if (interactionGuidance) {
+        signifierProperty.updateValues(curieActionTypes.toArray(),
+          recommendedAbilities != null ? recommendedAbilities.toArray() : new String[0],
+          recommendedContexts != null ? recommendedContexts.toArray() : new String[0]);
+      } else {
+        signifierProperty.updateValues(curieActionTypes.toArray());
+      }
+    } else {
+      signifierProperty = createObsProperty(curieActionTypes, recommendedAbilities, recommendedContexts);
+      this.exposedSignifiers.put(signifierIri, signifierProperty);
+    }
+
+    return signifierProperty;
+  }
+
+  // Helper method to create ObsProperty based on the conditions
+  private ObsProperty createObsProperty(List<String> curieActionTypes, List<String> recommendedAbilities, List<String> recommendedContexts) {
+    if (interactionGuidance) {
+      return this.defineObsProperty("signifier", curieActionTypes.toArray(),
+        recommendedAbilities != null ? recommendedAbilities.toArray() : new String[0],
+        recommendedContexts != null ? recommendedContexts.toArray() : new String[0]);
+    } else {
+      ListTerm typesList = new ListTermImpl();
+      curieActionTypes.forEach(type -> typesList.append(new StringTermImpl(type)));
+      return this.defineObsProperty("signifier", typesList);
+    }
   }
 
   /**
@@ -169,34 +204,6 @@ public class ResourceArtifact extends Artifact {
       failed("Unknown action: " + actionTag);
     }
   }
-
-  /*
-  private String getPrefixedIri(String iri) {
-    if (nsRegistryId.isPresent()) {
-      OpFeedbackParam<String> prefixedIri = new OpFeedbackParam<>();
-      try {
-        execLinkedOp(this.nsRegistryId.get(), "prefixedIRI", iri, prefixedIri);
-        return prefixedIri.get();
-      } catch (OperationException e) {
-        throw new RuntimeException(e);
-      }
-    }
-    return iri;
-  }
-
-  private String getResolvedIri(String iri) {
-    if (nsRegistryId.isPresent()) {
-      OpFeedbackParam<String> resolvedIri = new OpFeedbackParam<>();
-      try {
-        execLinkedOp(this.nsRegistryId.get(), "resolvedIRI", iri, resolvedIri);
-        return resolvedIri.get();
-      } catch (OperationException e) {
-        throw new RuntimeException(e);
-      }
-    }
-    return iri;
-  }
-  */
 
   protected List<String> getRecommendedAbilities(Signifier signifier) {
     Set<Ability> recommendedAbilities = signifier.getRecommendedAbilities();

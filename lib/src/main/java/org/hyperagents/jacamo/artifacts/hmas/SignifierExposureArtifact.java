@@ -101,6 +101,9 @@ public class SignifierExposureArtifact extends Artifact {
     }
 
     protected boolean idComplementary(ArtifactObsProperty prop) {
+      if (prop.getValues().length < 2) {
+        return true;
+      }
       Object[] objArray = (Object[]) prop.getValue(1);
       String[] recommendedAbilityTypes = Arrays.copyOf(objArray, objArray.length, String[].class);
       return Arrays.stream(recommendedAbilityTypes)
