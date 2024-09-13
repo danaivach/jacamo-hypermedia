@@ -35,9 +35,9 @@ public class WorkspaceThingArtifact extends WebSubThingArtifact {
   private IRI workspaceIRI;
   private Model graph;
   private ValueFactory rdf;
-  private Map<String, ObsProperty> parentWorkspaces = new HashMap();
-  private Map<String, ObsProperty> workspaces = new HashMap();
-  private Map<String, ObsProperty> artifacts = new HashMap();
+  private final Map<String, ObsProperty> parentWorkspaces = new HashMap();
+  private final Map<String, ObsProperty> workspaces = new HashMap();
+  private final Map<String, ObsProperty> artifacts = new HashMap();
 
   @Override
   public void init(String url, boolean dryRun) {
