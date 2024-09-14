@@ -112,7 +112,12 @@ public class ResourceArtifact extends Artifact {
           recommendedAbilities != null ? recommendedAbilities.toArray() : new String[0],
           recommendedContexts != null ? recommendedContexts.toArray() : new String[0]);
       } else {
-        signifierProperty.updateValues(curieActionTypes.toArray());
+        List<StringTermImpl> types = curieActionTypes.stream()
+          .map(StringTermImpl::new).toList();
+
+        ListTerm typesList = new ListTermImpl();
+        typesList.addAll(types);
+        signifierProperty.updateValues(typesList);
       }
     } else {
       signifierProperty = createObsProperty(curieActionTypes, recommendedAbilities, recommendedContexts);

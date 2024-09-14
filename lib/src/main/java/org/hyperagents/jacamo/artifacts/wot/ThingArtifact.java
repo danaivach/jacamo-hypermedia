@@ -637,9 +637,9 @@ public class ThingArtifact extends Artifact {
           ListTerm typesList = new ListTermImpl();
           typesList.addAll(types);
         if (!exposedAffordances.containsKey(action.getName())) {
-          ObsProperty affordanceProperty = getObsPropertyByTemplate("affordance", typesList);
+          ObsProperty affordanceProperty = getObsPropertyByTemplate("signifier", typesList);
           if (affordanceProperty == null) {
-            ObsProperty property = this.defineObsProperty("affordance", typesList);
+            ObsProperty property = this.defineObsProperty("signifier", typesList);
             this.exposedAffordances.put(action.getName(), property);
           }
         } else {
