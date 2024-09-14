@@ -622,6 +622,7 @@ public class ThingArtifact extends Artifact {
   protected void exposeAffordances() {
     if (this.affordanceExposure) {
       getObsProperty("exposureState").updateValue("inProgress");
+      Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(this.td.getThingURI().get()));
 
       for (ActionAffordance action : this.td.getActions()) {
 
@@ -640,6 +641,9 @@ public class ThingArtifact extends Artifact {
           ObsProperty affordanceProperty = getObsPropertyByTemplate("signifier", typesList);
           if (affordanceProperty == null) {
             ObsProperty property = this.defineObsProperty("signifier", typesList);
+
+            // Add annotation to the property
+            property.addAnnot(iriAnnotation);
             this.exposedAffordances.put(action.getName(), property);
           }
         } else {
