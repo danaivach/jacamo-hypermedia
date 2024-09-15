@@ -638,9 +638,9 @@ public class ThingArtifact extends Artifact {
           ListTerm typesList = new ListTermImpl();
           typesList.addAll(types);
         if (!exposedAffordances.containsKey(action.getName())) {
-          ObsProperty affordanceProperty = getObsPropertyByTemplate("signifier", typesList);
+          ObsProperty affordanceProperty = getObsPropertyByTemplate("affordance", typesList);
           if (affordanceProperty == null) {
-            ObsProperty property = this.defineObsProperty("signifier", typesList);
+            ObsProperty property = this.defineObsProperty("affordance", typesList);
 
             // Add annotation to the property
             property.addAnnot(iriAnnotation);
