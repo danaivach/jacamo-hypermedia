@@ -71,9 +71,9 @@ public class SignifierExposureArtifact extends Artifact {
 
   public class SignifierFilter implements IEventFilter, java.io.Serializable {
 
-    private final Set<String> agentAbilityTypes = new HashSet<>();
+    protected final Set<String> agentAbilityTypes = new HashSet<>();
     protected SignifierExposureArtifact artifact;
-    private ResourceProfile agentProfile;
+    protected ResourceProfile agentProfile;
 
     public SignifierFilter(SignifierExposureArtifact artifact, ResourceProfile agentProfile) {
       this.artifact = artifact;
