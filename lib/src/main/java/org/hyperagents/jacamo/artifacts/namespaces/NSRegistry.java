@@ -52,18 +52,20 @@ public class NSRegistry {
   public static String getPrefixedIRI(String iri, NSRegistry registry) {
     try {
       ParsedIRI parsedAbsoluteIri = new ParsedIRI(iri);
-
       for (Map.Entry<String, String> nsEntry : registry.getNamespaces().entrySet()) {
         ParsedIRI parsedNamespace = new ParsedIRI(nsEntry.getValue());
-        ParsedIRI relativeIri = parsedNamespace.relativize(parsedAbsoluteIri);
-        if (!parsedAbsoluteIri.equals(relativeIri)) {
-          return nsEntry.getKey() + ":" + relativeIri;
+
+        // Check if the absolute IRI starts with the namespace IRI
+        if (parsedAbsoluteIri.toString().startsWith(parsedNamespace.toString())) {
+          // Calculate the relative path
+          String relativePath = parsedAbsoluteIri.toString().substring(parsedNamespace.toString().length());
+          return nsEntry.getKey() + ":" + relativePath;
         }
       }
     } catch (URISyntaxException e) {
       e.printStackTrace();
     }
-    return iri;
+    return iri; // Return original IRI if no match found
   }
 
   public static String getResolvedIRI(String iri, NSRegistry registry) {
