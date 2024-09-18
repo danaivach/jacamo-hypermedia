@@ -78,14 +78,17 @@ public class WorkspaceThingArtifact extends WebSubThingArtifact {
       // Extract parent workspaces (if any) from the workspace description
       List<String> parents = Models.objectIRIs(graph.filter(workspaceIRI, CORE.IS_CONTAINED_IN, null))
         .stream().map(iri -> iri.stringValue()).collect(Collectors.toList());
+      parents.removeAll(this.parentWorkspaces.keySet());
       exposeProperties(parents, "parentWorkspace");
 
       // Extract child workspaces (if any) from the workspace description
       List<String> workspaces = getMembersOfType(CORE.WORKSPACE);
+      workspaces.removeAll(this.workspaces.keySet());
       exposeProperties(workspaces, "workspace");
 
       // Extract artifacts (if any) from the workspace description
       List<String> artifacts = getMembersOfType(CORE.ARTIFACT);
+      artifacts.removeAll(this.artifacts.keySet());
       exposeProperties(artifacts, "artifact");
     } else {
       failed("Could not read RDF graph for container: " + td.getThingURI());
