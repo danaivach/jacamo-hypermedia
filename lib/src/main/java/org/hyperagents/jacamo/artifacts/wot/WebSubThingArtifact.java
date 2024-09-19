@@ -96,7 +96,7 @@ public class WebSubThingArtifact extends ThingArtifact {
             }
 
             if (hub.isPresent() && topic.isPresent()) {
-                log("Found WebSub links in headers: " + hub.get() + ", " + topic.get());
+                //log("Found WebSub links in headers: " + hub.get() + ", " + topic.get());
                 defineObsProperty("websub", hub.get(), topic.get());
                 return;
             }
