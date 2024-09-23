@@ -1,6 +1,7 @@
 package org.hyperagents.jacamo.artifacts.hmas;
 
 import cartago.LINK;
+import ch.unisg.ics.interactions.hmas.core.io.InvalidResourceProfileException;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import org.apache.hc.client5.http.fluent.Request;
 import org.apache.hc.core5.http.ClassicHttpResponse;
@@ -8,14 +9,23 @@ import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.Statement;
+import org.eclipse.rdf4j.model.impl.LinkedHashModel;
+import org.eclipse.rdf4j.model.util.Statements;
+import org.eclipse.rdf4j.rio.*;
+import org.eclipse.rdf4j.rio.helpers.StatementCollector;
+import org.hyperagents.jacamo.artifacts.namespaces.NSRegistry;
 import org.hyperagents.jacamo.artifacts.yggdrasil.Notification;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.io.Reader;
+import java.io.StringReader;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class WebSubResourceArtifact extends ResourceArtifact {
 
@@ -27,10 +37,40 @@ public class WebSubResourceArtifact extends ResourceArtifact {
 
   @LINK
   public void onNotification(Notification notification) {
+    System.out.println(notification.getMessage());
+
     if ("text/turtle".equals(notification.getContentType())) {
-      this.profile = ResourceProfileGraphReader.readFromString(notification.getMessage());
-      this.exposeSignifiers();
-    } else if ("application/json".equals(notification.getContentType())) {
+      try {
+        this.profile = ResourceProfileGraphReader.readFromString(notification.getMessage());
+        this.exposeSignifiers();
+      } catch (InvalidResourceProfileException e) {
+        try  {
+          Optional<IRI> resourceIri = this.profile.getResource().getIRI();
+          if (resourceIri.isPresent()) {
+            StringReader reader = new StringReader(notification.getMessage());
+            Model model = Rio.parse(reader, "", RDFFormat.TURTLE);
+            Set<Statement> propertyStatements = new HashSet<>(model.filter(resourceIri.get(), null, null));
+            for (Statement statement : propertyStatements) {
+              String predicate = NSRegistry.getPrefixedIRI(statement.getPredicate().stringValue(), this.namespaces);
+              String object = statement.getObject().stringValue();
+              if (statement.getObject().isResource()) {
+                object = NSRegistry.getPrefixedIRI(object, this.namespaces);
+              }
+              this.defineObsProperty("property", predicate, object);
+            }
+          }
+        } catch (RDFParseException e1) {
+          throw new RuntimeException("RDFParseException: Failed to parse Turtle RDF message.", e1);
+        } catch (IOException e2) {
+          throw new RuntimeException("IOException: Failed to read Turtle RDF message.", e2);
+        } catch (RDFHandlerException e3) {
+          throw new RuntimeException("RDFHandlerException: Error during RDF processing.", e3);
+        } catch (Exception ex) {
+          throw new RuntimeException("Unexpected error during RDF parsing.", ex);
+        }
+      }
+    }
+    else if ("application/json".equals(notification.getContentType())) {
       log("The state of this ResourceArtifact has changed: " + notification.getMessage());
       String obsProp = notification.getMessage();
       String functor = obsProp.substring(0, obsProp.indexOf("("));

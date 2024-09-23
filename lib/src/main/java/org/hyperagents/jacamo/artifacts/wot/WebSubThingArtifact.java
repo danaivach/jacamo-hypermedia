@@ -1,24 +1,36 @@
 package org.hyperagents.jacamo.artifacts.wot;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.io.StringReader;
+import java.util.*;
 import java.io.IOException;
 
 import cartago.LINK;
 
+import ch.unisg.ics.interactions.hmas.core.io.InvalidResourceProfileException;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import ch.unisg.ics.interactions.wot.td.ThingDescription;
+import ch.unisg.ics.interactions.wot.td.io.InvalidTDException;
 import ch.unisg.ics.interactions.wot.td.io.TDGraphReader;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.eclipse.rdf4j.model.IRI;
+import org.eclipse.rdf4j.model.Model;
+import org.eclipse.rdf4j.model.Statement;
+import org.eclipse.rdf4j.model.util.Values;
+import org.eclipse.rdf4j.rio.RDFFormat;
+import org.eclipse.rdf4j.rio.RDFHandlerException;
+import org.eclipse.rdf4j.rio.RDFParseException;
+import org.eclipse.rdf4j.rio.Rio;
+import org.hyperagents.jacamo.artifacts.namespaces.NSRegistry;
 import org.hyperagents.jacamo.artifacts.yggdrasil.Notification;
 import org.apache.hc.client5.http.fluent.Request;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Extension to the ThingArtifact class that adds Yggdrasil-specific WebSub
@@ -43,9 +55,37 @@ public class WebSubThingArtifact extends ThingArtifact {
     @LINK
     public void onNotification(Notification notification) {
       if ("text/turtle".equals(notification.getContentType())) {
-        this.td = TDGraphReader.readFromString(ThingDescription.TDFormat.RDF_TURTLE, notification.getMessage());
-        if (this.affordanceExposure) {
-          this.exposeAffordances();
+        try {
+          this.td = TDGraphReader.readFromString(ThingDescription.TDFormat.RDF_TURTLE, notification.getMessage());
+          if (this.affordanceExposure) {
+            this.exposeAffordances();
+          }
+        } catch (InvalidTDException e) {
+          try  {
+            Optional<String> resourceIri = this.td.getThingURI();
+            if (resourceIri.isPresent()) {
+              StringReader reader = new StringReader(notification.getMessage());
+              Model model = Rio.parse(reader, "", RDFFormat.TURTLE);
+              Set<Statement> propertyStatements =
+                new HashSet<>(model.filter(Values.iri(resourceIri.get()), null, null));
+              for (Statement statement : propertyStatements) {
+                String predicate = NSRegistry.getPrefixedIRI(statement.getPredicate().stringValue(), this.namespaces);
+                String object = statement.getObject().stringValue();
+                if (statement.getObject().isResource()) {
+                  object = NSRegistry.getPrefixedIRI(object, this.namespaces);
+                }
+                this.defineObsProperty("property", predicate, object);
+              }
+            }
+          } catch (RDFParseException e1) {
+            throw new RuntimeException("RDFParseException: Failed to parse Turtle RDF message.", e1);
+          } catch (IOException e2) {
+            throw new RuntimeException("IOException: Failed to read Turtle RDF message.", e2);
+          } catch (RDFHandlerException e3) {
+            throw new RuntimeException("RDFHandlerException: Error during RDF processing.", e3);
+          } catch (Exception ex) {
+            throw new RuntimeException("Unexpected error during RDF parsing.", ex);
+          }
         }
       } else if ("application/json".equals(notification.getContentType())) {
         log("The state of this ThingArtifact has changed: " + notification.getMessage());
