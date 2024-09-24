@@ -97,7 +97,6 @@ public class SignifierExposureArtifact extends Artifact {
           .collect(Collectors.toSet());
         this.agentAbilityTypes.addAll(types);
       }
-      System.out.println("Discovered agent abilities: " + this.agentAbilityTypes);
     }
 
     protected boolean idComplementary(ArtifactObsProperty prop) {

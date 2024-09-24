@@ -37,41 +37,47 @@ public class WebSubResourceArtifact extends ResourceArtifact {
 
   @LINK
   public void onNotification(Notification notification) {
-    System.out.println(notification.getMessage());
 
     if ("text/turtle".equals(notification.getContentType())) {
       try {
         this.profile = ResourceProfileGraphReader.readFromString(notification.getMessage());
         this.exposeSignifiers();
       } catch (InvalidResourceProfileException e) {
-        try  {
-          Optional<IRI> resourceIri = this.profile.getResource().getIRI();
-          if (resourceIri.isPresent()) {
-            StringReader reader = new StringReader(notification.getMessage());
-            Model model = Rio.parse(reader, "", RDFFormat.TURTLE);
-            Set<Statement> propertyStatements = new HashSet<>(model.filter(resourceIri.get(), null, null));
-            for (Statement statement : propertyStatements) {
-              String predicate = NSRegistry.getPrefixedIRI(statement.getPredicate().stringValue(), this.namespaces);
-              String object = statement.getObject().stringValue();
-              if (statement.getObject().isResource()) {
-                object = NSRegistry.getPrefixedIRI(object, this.namespaces);
-              }
-              this.defineObsProperty("property", predicate, object);
-            }
-          }
-        } catch (RDFParseException e1) {
-          throw new RuntimeException("RDFParseException: Failed to parse Turtle RDF message.", e1);
-        } catch (IOException e2) {
-          throw new RuntimeException("IOException: Failed to read Turtle RDF message.", e2);
-        } catch (RDFHandlerException e3) {
-          throw new RuntimeException("RDFHandlerException: Error during RDF processing.", e3);
-        } catch (Exception ex) {
-          throw new RuntimeException("Unexpected error during RDF parsing.", ex);
-        }
+        handlePropertyNotification(notification);
       }
     }
     else if ("application/json".equals(notification.getContentType())) {
-      log("The state of this ResourceArtifact has changed: " + notification.getMessage());
+      handlePropertyNotification(notification);
+    }
+  }
+
+  private void handlePropertyNotification(Notification notification) {
+    if ("text/turtle".equals(notification.getContentType())) {
+      try  {
+        Optional<IRI> resourceIri = this.profile.getResource().getIRI();
+        if (resourceIri.isPresent()) {
+          StringReader reader = new StringReader(notification.getMessage());
+          Model model = Rio.parse(reader, "", RDFFormat.TURTLE);
+          Set<Statement> propertyStatements = new HashSet<>(model.filter(resourceIri.get(), null, null));
+          for (Statement statement : propertyStatements) {
+            String predicate = NSRegistry.getPrefixedIRI(statement.getPredicate().stringValue(), this.namespaces);
+            String object = statement.getObject().stringValue();
+            if (statement.getObject().isResource()) {
+              object = NSRegistry.getPrefixedIRI(object, this.namespaces);
+            }
+            this.defineObsProperty("property", predicate, object);
+          }
+        }
+      } catch (RDFParseException e1) {
+        throw new RuntimeException("RDFParseException: Failed to parse Turtle RDF message.", e1);
+      } catch (IOException e2) {
+        throw new RuntimeException("IOException: Failed to read Turtle RDF message.", e2);
+      } catch (RDFHandlerException e3) {
+        throw new RuntimeException("RDFHandlerException: Error during RDF processing.", e3);
+      } catch (Exception ex) {
+        throw new RuntimeException("Unexpected error during RDF parsing.", ex);
+      }
+    } else if ("application/json".equals(notification.getContentType())) {
       String obsProp = notification.getMessage();
       String functor = obsProp.substring(0, obsProp.indexOf("("));
       String[] params = obsProp.substring(obsProp.indexOf("(") + 1, obsProp.length() - 1)
