@@ -53,7 +53,7 @@ public class WebSubThingArtifact extends ThingArtifact {
     }
 
     @LINK
-    public void onNotification(Notification notification) {
+    public void onNotification(Notification notification) throws RDFParseException {
       if ("text/turtle".equals(notification.getContentType())) {
         try {
           this.td = TDGraphReader.readFromString(ThingDescription.TDFormat.RDF_TURTLE, notification.getMessage());
