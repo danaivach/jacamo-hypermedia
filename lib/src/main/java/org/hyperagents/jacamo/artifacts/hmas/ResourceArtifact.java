@@ -1,7 +1,6 @@
 package org.hyperagents.jacamo.artifacts.hmas;
 
 import cartago.Artifact;
-import cartago.GUARD;
 import cartago.OPERATION;
 import cartago.ObsProperty;
 import ch.unisg.ics.interactions.hmas.bindings.Action;
@@ -13,12 +12,11 @@ import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import ch.unisg.ics.interactions.hmas.interaction.signifiers.*;
 import ch.unisg.ics.interactions.hmas.interaction.vocabularies.INTERACTION;
 import ch.unisg.ics.interactions.hmas.interaction.vocabularies.SHACL;
-import ch.unisg.ics.interactions.wot.td.vocabularies.TD;
 import jason.asSyntax.*;
-import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Resource;
 import org.eclipse.rdf4j.model.Statement;
+import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.model.impl.SimpleValueFactory;
 import org.hyperagents.jacamo.artifacts.namespaces.NSRegistry;
 
@@ -46,6 +44,35 @@ public class ResourceArtifact extends Artifact {
   protected Map<String, String> namespaces;
   private String exposureState;
 
+  // Method to find all subjects that have a specific predicate in the model
+  private static Set<Resource> findSubjectsWithPredicate(Model model, org.eclipse.rdf4j.model.IRI predicate) {
+    Set<Resource> subjects = new HashSet<>();
+    for (Statement statement : model.filter(null, predicate, null)) {
+      subjects.add(statement.getSubject());
+    }
+    return subjects;
+  }
+
+  // Extract properties into a Map for a given subject
+  private static Map<String, String> extractProperties(Model model, Resource subject) {
+    Map<String, String> properties = new HashMap<>();
+    properties.put("propertyType", findObjectOfPredicate(model, subject, SHACL.PATH));
+    properties.put("propertyValue", findObjectOfPredicate(model, subject, SHACL.HAS_VALUE));
+    properties.put("targetArtifact", findObjectOfPredicate(model, subject, SimpleValueFactory.getInstance()
+      .createIRI(SHACL.NAMESPACE + "targetNode")));
+    return properties;
+  }
+
+  // Helper method to find the object of a specific predicate for a given subject
+  private static String findObjectOfPredicate(Model model, Resource subject, org.eclipse.rdf4j.model.IRI predicate) {
+    return model.filter(subject, predicate, null)
+      .stream()
+      .findFirst()
+      .map(Statement::getObject)
+      .map(Value::stringValue)
+      .orElse(null);
+  }
+
   public void init(String url) {
     try {
       profile = ResourceProfileGraphReader.readFromURL(url);
@@ -63,7 +90,7 @@ public class ResourceArtifact extends Artifact {
   }
 
   public void init(String url, boolean interactionGuidance) {
-   this.interactionGuidance = interactionGuidance;
+    this.interactionGuidance = interactionGuidance;
     init(url);
   }
 
@@ -88,7 +115,7 @@ public class ResourceArtifact extends Artifact {
 
         // Get recommended abilities and contexts if interactionGuidance is true
         List<String> recommendedAbilities = interactionGuidance ? getRecommendedAbilities(signifier) : null;
-        List<String> recommendedContexts = interactionGuidance ? getRecommendedContexts(signifier) : null;
+        List<Literal> recommendedContexts = interactionGuidance ? getRecommendedContexts(signifier) : null;
 
         ObsProperty signifierProperty = createOrUpdateObsProperty(signifierIri, curieActionTypes, recommendedAbilities, recommendedContexts);
 
@@ -102,7 +129,7 @@ public class ResourceArtifact extends Artifact {
   }
 
   // Helper method to create or update ObsProperty
-  private ObsProperty createOrUpdateObsProperty(String signifierIri, List<String> curieActionTypes, List<String> recommendedAbilities, List<String> recommendedContexts) {
+  private ObsProperty createOrUpdateObsProperty(String signifierIri, List<String> curieActionTypes, List<String> recommendedAbilities, List<Literal> recommendedContexts) {
     ObsProperty signifierProperty;
 
     if (this.exposedSignifiers.containsKey(signifierIri)) {
@@ -128,7 +155,7 @@ public class ResourceArtifact extends Artifact {
   }
 
   // Helper method to create ObsProperty based on the conditions
-  private ObsProperty createObsProperty(List<String> curieActionTypes, List<String> recommendedAbilities, List<String> recommendedContexts) {
+  private ObsProperty createObsProperty(List<String> curieActionTypes, List<String> recommendedAbilities, List<Literal> recommendedContexts) {
     if (interactionGuidance) {
       return this.defineObsProperty("signifier", curieActionTypes.toArray(),
         recommendedAbilities != null ? recommendedAbilities.toArray() : new String[0],
@@ -160,7 +187,7 @@ public class ResourceArtifact extends Artifact {
    * or the CURIE (Compact URI), e.g., <code>invokeAction("saref:ToggleCommand")</code>, and both will
    * produce the same result.</p>
    *
-   * @param prefix The prefix of the namespace, e.g., "saref".
+   * @param prefix    The prefix of the namespace, e.g., "saref".
    * @param namespace The name of the namespace, e.g., "https://saref.etsi.org/core/".
    */
   @OPERATION
@@ -168,7 +195,6 @@ public class ResourceArtifact extends Artifact {
     this.namespaces.put(prefix, namespace);
     this.exposeSignifiers();
   }
-
 
   /**
    * CArtAgO operation for invoking an action on a resource using a semantic model of the resource.
@@ -221,35 +247,34 @@ public class ResourceArtifact extends Artifact {
       .toList();
   }
 
-
-  protected List<String> getRecommendedContexts(Signifier signifier) {
+  protected List<Literal> getRecommendedContexts(Signifier signifier) {
     Set<Context> contexts = signifier.getRecommendedContexts();
-    List<String> BDIContexts = new ArrayList<>();
+    List<Literal> recommendedContexts = new ArrayList<>();
 
     SimpleValueFactory valueFactory = SimpleValueFactory.getInstance();
-    IRI hasBeliefResource = valueFactory.createIRI("http://example.org/hasBelief");
 
-// Iterate over each context
     for (Context context : contexts) {
       Model contextModel = context.getModel();
 
-      // Extract beliefs (subjects) for the current context
-      List<Resource> beliefsForCurrentContext = contextModel.filter(null, SHACL.PATH, hasBeliefResource)
-        .stream()
-        .map(Statement::getSubject)
-        .toList();
+      Set<Resource> subjects = findSubjectsWithPredicate(contextModel, SHACL.PATH);
 
-      // For each belief (subject), collect the objects of statements where SHACL.HAS_VALUE is the predicate
-      for (Resource belief : beliefsForCurrentContext) {
-        List<String> beliefContents = contextModel.filter(belief, SHACL.HAS_VALUE, null)
-          .stream()
-          .map(statement -> statement.getObject().stringValue()) // Convert Value to String
-          .toList();
+      // Process each subject and print the extracted properties
+      subjects.forEach(shapeResource -> {
+        Map<String, String> properties = extractProperties(contextModel, shapeResource);
 
-        // Add the belief content (as Strings) to the overall list
-        BDIContexts.addAll(beliefContents);
-      }
+        StringTerm propertyType = ASSyntax.createString(NSRegistry.getPrefixedIRI(properties.get("propertyType"), this.namespaces));
+        StringTerm propertyValue = ASSyntax.createString(properties.get("propertyValue"));
+        StringTerm targetResource = ASSyntax.createString(properties.get("targetArtifact"));
+
+        Literal contextProperty = new LiteralImpl("property");
+        contextProperty.addTerm(propertyType);
+        contextProperty.addTerm(propertyValue);
+
+        Structure iriAnnotation = ASSyntax.createStructure("iri", targetResource);
+        contextProperty.addAnnot(iriAnnotation);
+        recommendedContexts.add(contextProperty);
+      });
     }
-    return BDIContexts;
+    return recommendedContexts;
   }
 }

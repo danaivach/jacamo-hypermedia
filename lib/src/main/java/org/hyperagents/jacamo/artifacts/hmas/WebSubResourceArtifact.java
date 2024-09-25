@@ -1,8 +1,12 @@
 package org.hyperagents.jacamo.artifacts.hmas;
 
 import cartago.LINK;
+import cartago.ObsProperty;
 import ch.unisg.ics.interactions.hmas.core.io.InvalidResourceProfileException;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
+import jason.asSyntax.ASSyntax;
+import jason.asSyntax.StringTerm;
+import jason.asSyntax.Structure;
 import org.apache.hc.client5.http.fluent.Request;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
@@ -12,20 +16,18 @@ import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Model;
 import org.eclipse.rdf4j.model.Statement;
-import org.eclipse.rdf4j.model.impl.LinkedHashModel;
-import org.eclipse.rdf4j.model.util.Statements;
-import org.eclipse.rdf4j.rio.*;
-import org.eclipse.rdf4j.rio.helpers.StatementCollector;
+import org.eclipse.rdf4j.rio.RDFFormat;
+import org.eclipse.rdf4j.rio.RDFHandlerException;
+import org.eclipse.rdf4j.rio.RDFParseException;
+import org.eclipse.rdf4j.rio.Rio;
 import org.hyperagents.jacamo.artifacts.namespaces.NSRegistry;
 import org.hyperagents.jacamo.artifacts.yggdrasil.Notification;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.io.StringReader;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class WebSubResourceArtifact extends ResourceArtifact {
 
@@ -45,15 +47,14 @@ public class WebSubResourceArtifact extends ResourceArtifact {
       } catch (InvalidResourceProfileException e) {
         handlePropertyNotification(notification);
       }
-    }
-    else if ("application/json".equals(notification.getContentType())) {
+    } else if ("application/json".equals(notification.getContentType())) {
       handlePropertyNotification(notification);
     }
   }
 
   private void handlePropertyNotification(Notification notification) {
     if ("text/turtle".equals(notification.getContentType())) {
-      try  {
+      try {
         Optional<IRI> resourceIri = this.profile.getResource().getIRI();
         if (resourceIri.isPresent()) {
           StringReader reader = new StringReader(notification.getMessage());
@@ -65,7 +66,10 @@ public class WebSubResourceArtifact extends ResourceArtifact {
             if (statement.getObject().isResource()) {
               object = NSRegistry.getPrefixedIRI(object, this.namespaces);
             }
-            this.defineObsProperty("property", predicate, object);
+            ObsProperty property = this.defineObsProperty("property", predicate, object);
+            StringTerm targetResource = ASSyntax.createString(resourceIri.get());
+            Structure iriAnnotation = ASSyntax.createStructure("iri", targetResource);
+            property.addAnnot(iriAnnotation);
           }
         }
       } catch (RDFParseException e1) {
