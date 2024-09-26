@@ -6,11 +6,16 @@ import java.io.IOException;
 
 import cartago.LINK;
 
+import cartago.ObsProperty;
 import ch.unisg.ics.interactions.hmas.core.io.InvalidResourceProfileException;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import ch.unisg.ics.interactions.wot.td.ThingDescription;
 import ch.unisg.ics.interactions.wot.td.io.InvalidTDException;
 import ch.unisg.ics.interactions.wot.td.io.TDGraphReader;
+import jason.asSyntax.ASSyntax;
+import jason.asSyntax.Atom;
+import jason.asSyntax.StringTerm;
+import jason.asSyntax.Structure;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
@@ -79,12 +84,18 @@ public class WebSubThingArtifact extends ThingArtifact {
           Set<Statement> propertyStatements =
             new HashSet<>(model.filter(Values.iri(resourceIri.get()), null, null));
           for (Statement statement : propertyStatements) {
+            ObsProperty property;
             String predicate = NSRegistry.getPrefixedIRI(statement.getPredicate().stringValue(), this.namespaces);
             String object = statement.getObject().stringValue();
             if (statement.getObject().isResource()) {
               object = NSRegistry.getPrefixedIRI(object, this.namespaces);
+              property = this.defineObsProperty("property", predicate, object);
+            } else {
+              property = this.defineObsProperty("property", predicate, new Atom(object));
             }
-            this.defineObsProperty("property", predicate, object);
+            StringTerm targetResource = ASSyntax.createString(resourceIri.get());
+            Structure iriAnnotation = ASSyntax.createStructure("iri", targetResource);
+            property.addAnnot(iriAnnotation);
           }
         }
       } catch (RDFParseException e1) {

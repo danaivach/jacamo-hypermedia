@@ -5,6 +5,7 @@ import cartago.ObsProperty;
 import ch.unisg.ics.interactions.hmas.core.io.InvalidResourceProfileException;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import jason.asSyntax.ASSyntax;
+import jason.asSyntax.Atom;
 import jason.asSyntax.StringTerm;
 import jason.asSyntax.Structure;
 import org.apache.hc.client5.http.fluent.Request;
@@ -61,12 +62,15 @@ public class WebSubResourceArtifact extends ResourceArtifact {
           Model model = Rio.parse(reader, "", RDFFormat.TURTLE);
           Set<Statement> propertyStatements = new HashSet<>(model.filter(resourceIri.get(), null, null));
           for (Statement statement : propertyStatements) {
+            ObsProperty property;
             String predicate = NSRegistry.getPrefixedIRI(statement.getPredicate().stringValue(), this.namespaces);
             String object = statement.getObject().stringValue();
             if (statement.getObject().isResource()) {
               object = NSRegistry.getPrefixedIRI(object, this.namespaces);
+              property = this.defineObsProperty("property", predicate, object);
+            } else {
+              property = this.defineObsProperty("property", predicate, new Atom(object));
             }
-            ObsProperty property = this.defineObsProperty("property", predicate, object);
             StringTerm targetResource = ASSyntax.createString(resourceIri.get());
             Structure iriAnnotation = ASSyntax.createStructure("iri", targetResource);
             property.addAnnot(iriAnnotation);
