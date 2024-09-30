@@ -622,7 +622,7 @@ public class ThingArtifact extends Artifact {
   protected void exposeAffordances() {
     if (this.affordanceExposure) {
       getObsProperty("exposureState").updateValue("inProgress");
-      Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(this.td.getThingURI().get()));
+      Structure iriAnnotation = ASSyntax.createStructure("iri", new StringTermImpl(this.td.getThingURI().get()));
 
       for (ActionAffordance action : this.td.getActions()) {
 

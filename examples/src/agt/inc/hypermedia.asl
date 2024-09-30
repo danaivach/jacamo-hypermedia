@@ -1,3 +1,7 @@
+/* Rules for inferring whether the agent has beliefs in a list */
+applies([]) :- true.
+applies([Context | RemainingContext]) :- Context & applies(RemainingContext).
+
 /*
  * Mirroring of a hypermedia environment on the local CArtAgO node
  */
@@ -12,6 +16,7 @@
 
    // Register the JaCaMo namespace in the NS Registry
    !setNamespace("jacamo", "https://purl.org/hmas/jacamo/");
+   !setNamespace("websub", "https://purl.org/hmas/websub/");
 
    // Handle the entry workspace
    +workspace(EnvUrl, EnvName).
@@ -59,7 +64,7 @@
   ?workspace(WkspIRI, WkspNameStr);
 
   // Focus on the ResourceArtifact to observe its properties and events
-  //registerArtifactForFocus(WkspIRI, ArtIRI, ArtId, ArtName);
+  registerArtifactForFocus(WkspIRI, ArtIRI, ArtId, ArtName);
 
   .print("Created artifact ", ArtName, ", and registered for notifications").
 
@@ -92,8 +97,8 @@
   !registerForWebSub(WkspName, WkspArtIdTerm).
 
 @hypermedia_workspace_joining_hmas
-+!joinHypermediaWorkspace(WkspName, WkspArtId) : vocabulary("https://purl.org/hmas/") & signifier(["jacamo:JoinWorkspace"],_,_) <-
-  invokeAction("jacamo:JoinWorkspace")[artifact_id(WkspArtId)];.
++!joinHypermediaWorkspace(WkspName, WkspArtId) : vocabulary("https://purl.org/hmas/") & signifier(["jacamo:JoinWorkspace"]) <-
+  invokeAction("jacamo:JoinWorkspace")[artifact_id(WkspArtId)].
 
 @hypermedia_workspace_joining_td
 +!joinHypermediaWorkspace(WkspName, WkspArtId) : vocabulary("https://www.w3.org/2019/wot/td#") <-

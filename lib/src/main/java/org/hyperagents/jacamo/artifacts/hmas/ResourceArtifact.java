@@ -54,8 +54,8 @@ public class ResourceArtifact extends Artifact {
   }
 
   // Extract properties into a Map for a given subject
-  private static Map<String, String> extractProperties(Model model, Resource subject) {
-    Map<String, String> properties = new HashMap<>();
+  private static Map<String, Value> extractProperties(Model model, Resource subject) {
+    Map<String, Value> properties = new HashMap<>();
     properties.put("propertyType", findObjectOfPredicate(model, subject, SHACL.PATH));
     properties.put("propertyValue", findObjectOfPredicate(model, subject, SHACL.HAS_VALUE));
     properties.put("targetArtifact", findObjectOfPredicate(model, subject, SimpleValueFactory.getInstance()
@@ -64,12 +64,11 @@ public class ResourceArtifact extends Artifact {
   }
 
   // Helper method to find the object of a specific predicate for a given subject
-  private static String findObjectOfPredicate(Model model, Resource subject, org.eclipse.rdf4j.model.IRI predicate) {
+  private static Value findObjectOfPredicate(Model model, Resource subject, org.eclipse.rdf4j.model.IRI predicate) {
     return model.filter(subject, predicate, null)
       .stream()
       .findFirst()
       .map(Statement::getObject)
-      .map(Value::stringValue)
       .orElse(null);
   }
 
@@ -117,10 +116,10 @@ public class ResourceArtifact extends Artifact {
         List<String> recommendedAbilities = interactionGuidance ? getRecommendedAbilities(signifier) : null;
         List<Literal> recommendedContexts = interactionGuidance ? getRecommendedContexts(signifier) : null;
 
-        ObsProperty signifierProperty = createOrUpdateObsProperty(signifierIri, curieActionTypes, recommendedAbilities, recommendedContexts);
+        ObsProperty signifierProperty = createOrUpdateObsSignifier(signifierIri, curieActionTypes, recommendedAbilities, recommendedContexts);
 
         // Add annotation to the property
-        Structure iriAnnotation = ASSyntax.createStructure("iri", ASSyntax.createString(signifierIri));
+        Structure iriAnnotation = ASSyntax.createStructure("iri", new StringTermImpl(signifierIri));
         signifierProperty.addAnnot(iriAnnotation);
       });
     }
@@ -129,7 +128,7 @@ public class ResourceArtifact extends Artifact {
   }
 
   // Helper method to create or update ObsProperty
-  private ObsProperty createOrUpdateObsProperty(String signifierIri, List<String> curieActionTypes, List<String> recommendedAbilities, List<Literal> recommendedContexts) {
+  private ObsProperty createOrUpdateObsSignifier(String signifierIri, List<String> curieActionTypes, List<String> recommendedAbilities, List<Literal> recommendedContexts) {
     ObsProperty signifierProperty;
 
     if (this.exposedSignifiers.containsKey(signifierIri)) {
@@ -147,7 +146,7 @@ public class ResourceArtifact extends Artifact {
         signifierProperty.updateValues(typesList);
       }
     } else {
-      signifierProperty = createObsProperty(curieActionTypes, recommendedAbilities, recommendedContexts);
+      signifierProperty = createObsSignifier(curieActionTypes, recommendedAbilities, recommendedContexts);
       this.exposedSignifiers.put(signifierIri, signifierProperty);
     }
 
@@ -155,7 +154,7 @@ public class ResourceArtifact extends Artifact {
   }
 
   // Helper method to create ObsProperty based on the conditions
-  private ObsProperty createObsProperty(List<String> curieActionTypes, List<String> recommendedAbilities, List<Literal> recommendedContexts) {
+  private ObsProperty createObsSignifier(List<String> curieActionTypes, List<String> recommendedAbilities, List<Literal> recommendedContexts) {
     if (interactionGuidance) {
       return this.defineObsProperty("signifier", curieActionTypes.toArray(),
         recommendedAbilities != null ? recommendedAbilities.toArray() : new String[0],
@@ -251,8 +250,6 @@ public class ResourceArtifact extends Artifact {
     Set<Context> contexts = signifier.getRecommendedContexts();
     List<Literal> recommendedContexts = new ArrayList<>();
 
-    SimpleValueFactory valueFactory = SimpleValueFactory.getInstance();
-
     for (Context context : contexts) {
       Model contextModel = context.getModel();
 
@@ -260,11 +257,19 @@ public class ResourceArtifact extends Artifact {
 
       // Process each subject and print the extracted properties
       subjects.forEach(shapeResource -> {
-        Map<String, String> properties = extractProperties(contextModel, shapeResource);
+        Map<String, Value> properties = extractProperties(contextModel, shapeResource);
+        StringTerm targetResource = new StringTermImpl(properties.get("targetArtifact").stringValue());
+        String prefixedPropertyType = NSRegistry.getPrefixedIRI(properties.get("propertyType").stringValue(), this.namespaces);
+        StringTerm propertyType = new StringTermImpl(prefixedPropertyType);
 
-        StringTerm propertyType = ASSyntax.createString(NSRegistry.getPrefixedIRI(properties.get("propertyType"), this.namespaces));
-        StringTerm propertyValue = ASSyntax.createString(properties.get("propertyValue"));
-        StringTerm targetResource = ASSyntax.createString(properties.get("targetArtifact"));
+        Term propertyValue;
+        Value value = properties.get("propertyValue");
+        if (value.isResource()) {
+          String prefixedPropertyValue = NSRegistry.getPrefixedIRI(properties.get("propertyValue").stringValue(), this.namespaces);
+          propertyValue = new StringTermImpl(prefixedPropertyValue);
+        } else {
+          propertyValue = new Atom(value.stringValue());
+        }
 
         Literal contextProperty = new LiteralImpl("property");
         contextProperty.addTerm(propertyType);

@@ -4,10 +4,7 @@ import cartago.LINK;
 import cartago.ObsProperty;
 import ch.unisg.ics.interactions.hmas.core.io.InvalidResourceProfileException;
 import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
-import jason.asSyntax.ASSyntax;
-import jason.asSyntax.Atom;
-import jason.asSyntax.StringTerm;
-import jason.asSyntax.Structure;
+import jason.asSyntax.*;
 import org.apache.hc.client5.http.fluent.Request;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
@@ -71,7 +68,7 @@ public class WebSubResourceArtifact extends ResourceArtifact {
             } else {
               property = this.defineObsProperty("property", predicate, new Atom(object));
             }
-            StringTerm targetResource = ASSyntax.createString(resourceIri.get());
+            StringTerm targetResource = new StringTermImpl(resourceIri.get().stringValue());
             Structure iriAnnotation = ASSyntax.createStructure("iri", targetResource);
             property.addAnnot(iriAnnotation);
           }

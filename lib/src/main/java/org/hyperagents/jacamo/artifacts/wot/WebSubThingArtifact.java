@@ -12,10 +12,7 @@ import ch.unisg.ics.interactions.hmas.interaction.io.ResourceProfileGraphReader;
 import ch.unisg.ics.interactions.wot.td.ThingDescription;
 import ch.unisg.ics.interactions.wot.td.io.InvalidTDException;
 import ch.unisg.ics.interactions.wot.td.io.TDGraphReader;
-import jason.asSyntax.ASSyntax;
-import jason.asSyntax.Atom;
-import jason.asSyntax.StringTerm;
-import jason.asSyntax.Structure;
+import jason.asSyntax.*;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
@@ -93,7 +90,7 @@ public class WebSubThingArtifact extends ThingArtifact {
             } else {
               property = this.defineObsProperty("property", predicate, new Atom(object));
             }
-            StringTerm targetResource = ASSyntax.createString(resourceIri.get());
+            StringTerm targetResource = new StringTermImpl(resourceIri.get());
             Structure iriAnnotation = ASSyntax.createStructure("iri", targetResource);
             property.addAnnot(iriAnnotation);
           }
